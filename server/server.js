@@ -13,11 +13,28 @@ try { PAGE = fs.readFileSync(path.join(__dirname, "public", "index.html")); } ca
 const key = (x, y) => `${x},${y}`;
 const rnd = (n) => Math.floor(Math.random() * n);
 
-function fleetFor(n) {
-  const base = [2, 3, 3, 4, 5, 4];
-  const r = [];
-  for (let i = 0; i < n; i++) r.push(base[i % base.length]);
-  return r;
+// Tetris benzeri gemi şekilleri (bağıl hücreler). Her gemiye bir şekil atanır.
+const SHAPE_POOL = [
+  [[0,0],[1,0]],                   // I2 (düz-2)
+  [[0,0],[1,0],[2,0]],             // I3 (düz-3)
+  [[0,0],[0,1],[1,1]],             // L3 (köşe)
+  [[0,0],[1,0],[0,1],[1,1]],       // O (2x2 kare)
+  [[0,0],[1,0],[2,0],[1,1]],       // T4
+  [[0,0],[1,0],[1,1],[2,1]],       // S4 (zikzak)
+  [[0,0],[1,0],[2,0],[3,0]],       // I4 (düz-4)
+  [[0,0],[0,1],[0,2],[1,2]],       // L4
+];
+function fleetShapes(n) {
+  return SHAPE_POOL.slice(0, Math.min(Math.max(2, n), SHAPE_POOL.length)).map((s) => s.map((c) => [c[0], c[1]]));
+}
+// Şekli rastgele döndür + aynala, sonra (0,0) köşesine normalize et
+function transformShape(cells) {
+  let c = cells.map(([x, y]) => [x, y]);
+  const rot = Math.floor(Math.random() * 4);
+  for (let r = 0; r < rot; r++) c = c.map(([x, y]) => [y, -x]);
+  if (Math.random() < 0.5) c = c.map(([x, y]) => [-x, y]);
+  const minx = Math.min(...c.map((p) => p[0])), miny = Math.min(...c.map((p) => p[1]));
+  return c.map(([x, y]) => [x - minx, y - miny]);
 }
 
 const rooms = new Map(); // code -> room
@@ -81,24 +98,19 @@ function tryPlaceAll(room, players, fleet, side) {
   const result = new Map();
   for (const p of players) {
     const ships = [];
-    const lens = [...fleet].sort((a, b) => b - a);
-    for (const len of lens) {
+    // büyük şekilleri önce yerleştir (daha kolay sığar)
+    const order = [...fleet].sort((a, b) => b.length - a.length);
+    for (const shape of order) {
       let ok = false, attempt = 0;
-      while (attempt < 400 && !ok) {
+      while (attempt < 800 && !ok) {
         attempt++;
-        const horiz = Math.random() < 0.5;
-        const x = rnd(side), y = rnd(side);
-        const cells = [];
-        let fits = true;
-        for (let i = 0; i < len; i++) {
-          const cx = horiz ? x + i : x;
-          const cy = horiz ? y : y + i;
-          if (cx >= side || cy >= side) { fits = false; break; }
-          const k = key(cx, cy);
-          if (occ.has(k)) { fits = false; break; }
-          cells.push([cx, cy]);
-        }
-        if (fits) {
+        const t = transformShape(shape);
+        const sw = Math.max(...t.map((c) => c[0])) + 1;
+        const sh = Math.max(...t.map((c) => c[1])) + 1;
+        if (sw > side || sh > side) continue;
+        const ox = rnd(side - sw + 1), oy = rnd(side - sh + 1);
+        const cells = t.map(([x, y]) => [x + ox, y + oy]);
+        if (cells.every((c) => !occ.has(key(c[0], c[1])))) {
           cells.forEach((c) => occ.add(key(c[0], c[1])));
           ships.push({ cells, hit: cells.map(() => false) });
           ok = true;
@@ -115,17 +127,17 @@ function shipSunk(ship) { return ship.hit.every((h) => h); }
 
 function startGame(room) {
   const players = [...room.players.values()];
-  const fleet = fleetFor(room.shipsPerPlayer);
-  const total = players.length * fleet.reduce((a, b) => a + b, 0);
-  let side = Math.max(8, Math.ceil(Math.sqrt(total / 0.28)));
-  side = Math.min(side, 16);
+  const fleet = fleetShapes(room.shipsPerPlayer);
+  const total = players.length * fleet.reduce((a, s) => a + s.length, 0);
+  let side = Math.max(9, Math.ceil(Math.sqrt(total / 0.24)));
+  side = Math.min(side, 17);
 
   let placed = null, trySide = side;
-  while (placed === null && trySide <= 22) {
+  while (placed === null && trySide <= 24) {
     placed = tryPlaceAll(room, players, fleet, trySide);
     if (placed === null) trySide += 2;
   }
-  if (placed === null) { trySide = 22; placed = tryPlaceAll(room, players, fleet, 22) || new Map(); }
+  if (placed === null) { trySide = 24; placed = tryPlaceAll(room, players, fleet, 24) || new Map(); }
   room.w = trySide; room.h = trySide;
   room.occupancy.clear();
   for (const [pid, ships] of placed.entries()) {
