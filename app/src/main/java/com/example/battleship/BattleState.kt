@@ -1,5 +1,7 @@
 package com.example.battleship
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -42,6 +44,14 @@ class BattleState {
     var deadline by mutableStateOf(0L)
     var log by mutableStateOf<List<String>>(emptyList())
     var winner by mutableStateOf(-1)
+
+    // Batırma uyarısı ("İçinden geçti!")
+    var flash by mutableStateOf<String?>(null)
+    private var lastSunkSeq = 0
+    private val main = Handler(Looper.getMainLooper())
+
+    // Oyun bitince gemi haritası: hücre -> renk indeksi
+    var reveal by mutableStateOf<Map<Pair<Int, Int>, Int>>(emptyMap())
 
     val myReady: Boolean get() = players.firstOrNull { it.id == myId }?.ready == true
     val myTurn: Boolean get() = phase == "PLAYING" && turn == myId
@@ -149,6 +159,32 @@ class BattleState {
                 val ll = ArrayList<String>()
                 if (lj != null) for (i in 0 until lj.length()) ll.add(lj.optString(i))
                 log = ll
+
+                // Batırma uyarısı
+                val ss = m.optInt("sunkSeq", 0)
+                if (ss > lastSunkSeq) {
+                    lastSunkSeq = ss
+                    val by = m.optString("sunkBy"); val owner = m.optString("sunkOwner")
+                    flash = if (by == owner || owner.isBlank()) "$by bir gemi batırdı"
+                    else "$by, $owner'ın gemisini batırdı"
+                    main.postDelayed({ flash = null }, 2000)
+                }
+
+                // Oyun bitince gemi haritası
+                val rj = m.optJSONArray("reveal")
+                if (rj != null) {
+                    val map = HashMap<Pair<Int, Int>, Int>()
+                    for (i in 0 until rj.length()) {
+                        val o = rj.getJSONObject(i)
+                        val color = o.optInt("color")
+                        val cells = o.optJSONArray("cells") ?: continue
+                        for (j in 0 until cells.length()) {
+                            val c = cells.getJSONArray(j)
+                            map[c.getInt(0) to c.getInt(1)] = color
+                        }
+                    }
+                    reveal = map
+                }
             }
         }
     }
@@ -173,5 +209,6 @@ class BattleState {
         myId = -1; isHost = false; hostAddress = null
         phase = ""; myShips = emptyList(); players = emptyList(); shots = emptyList()
         turn = -1; deadline = 0; log = emptyList(); winner = -1
+        flash = null; reveal = emptyMap(); lastSunkSeq = 0
     }
 }

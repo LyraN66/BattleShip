@@ -70,11 +70,30 @@ class MainActivity : ComponentActivity() {
 private fun App(s: BattleState) {
     // Sistem geri tuşu: odadayken menüye dön (uygulamadan çıkma)
     BackHandler(enabled = s.connected || s.connecting) { s.leave() }
-    when {
-        !s.connected && !s.connecting -> HomeScreen(s)
-        s.phase == "LOBBY" || s.phase == "" -> LobbyScreen(s)
-        s.phase == "OVER" -> OverScreen(s)
-        else -> GameScreen(s) // PLACING / PLAYING
+    Box(Modifier.fillMaxSize()) {
+        when {
+            !s.connected && !s.connecting -> HomeScreen(s)
+            s.phase == "LOBBY" || s.phase == "" -> LobbyScreen(s)
+            s.phase == "OVER" -> OverScreen(s)
+            else -> GameScreen(s) // PLACING / PLAYING
+        }
+        s.flash?.let { FlashBanner(it) }
+    }
+}
+
+@Composable
+private fun BoxScope.FlashBanner(sub: String) {
+    Column(
+        Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 90.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xF2B71C1C))
+            .padding(horizontal = 26.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("💥 İçinden geçti!", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+        Text(sub, color = Color(0xFFFFE0E0), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -469,8 +488,63 @@ private fun OverScreen(s: BattleState) {
                 }
             }
         }
+        if (s.reveal.isNotEmpty()) {
+            Text("Gemiler neredeydi", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            RevealBoard(s)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                s.players.forEach { p ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(colorOf(p.color)))
+                        Text(p.name, color = Color(0xFF9FB3C8), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
         Button(onClick = { s.leave() }, modifier = Modifier.fillMaxWidth().height(50.dp)) {
             Text("Ana menüye dön")
+        }
+    }
+}
+
+@Composable
+private fun RevealBoard(s: BattleState) {
+    val w = s.w; val h = s.h
+    val reveal = s.reveal
+    val shotMap = remember(s.shots) { s.shots.associateBy { it.x to it.y } }
+    val colorById = remember(s.players) { s.players.associate { it.id to colorOf(it.color) } }
+    val water = Color(0xFF0B3C5D)
+    val waterAlt = Color(0xFF0E456B)
+    val gridLine = Color(0x33FFFFFF)
+
+    Canvas(
+        Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF07263E))
+    ) {
+        val cell = min(size.width / w, size.height / h)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val left = x * cell; val top = y * cell
+                drawRect(if ((x + y) % 2 == 0) water else waterAlt, Offset(left, top), Size(cell, cell))
+                val col = reveal[x to y]
+                if (col != null) {
+                    drawRect(colorOf(col).copy(alpha = 0.6f),
+                        Offset(left + cell * 0.1f, top + cell * 0.1f), Size(cell * 0.8f, cell * 0.8f))
+                }
+                val shot = shotMap[x to y]
+                if (shot != null) {
+                    val sc = colorById[shot.by] ?: Color.White
+                    if (shot.hit) {
+                        drawLine(sc, Offset(left + cell * 0.24f, top + cell * 0.24f),
+                            Offset(left + cell * 0.76f, top + cell * 0.76f), cell * 0.12f)
+                        drawLine(sc, Offset(left + cell * 0.76f, top + cell * 0.24f),
+                            Offset(left + cell * 0.24f, top + cell * 0.76f), cell * 0.12f)
+                    } else {
+                        drawCircle(sc, cell * 0.12f, Offset(left + cell / 2, top + cell / 2))
+                    }
+                }
+                drawRect(gridLine, Offset(left, top), Size(cell, cell), style = Stroke(1f))
+            }
         }
     }
 }

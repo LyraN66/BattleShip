@@ -63,6 +63,11 @@ class GameServer {
     private val occupancy = HashMap<Pair<Int, Int>, Pair<Int, Int>>() // cell -> (playerId, shipIndex)
     private val log = ArrayList<String>()
 
+    // Batırma olayı (istemcide "İçinden geçti!" göstermek için)
+    private var sunkSeq = 0
+    private var sunkBy = ""
+    private var sunkOwner = ""
+
     private var turnOrder = ArrayList<Int>()
     private var turnPos = 0
     private var deadline = 0L
@@ -295,8 +300,9 @@ class GameServer {
                 if (ci >= 0) ship.hit[ci] = true
                 if (ship.sunk) {
                     sp.sunkCount++
+                    sunkSeq++; sunkBy = sp.name; sunkOwner = ownerP?.name ?: ""
                     if (ownerId == shooter) log.add("${sp.name} kendi gemisini batırdı!")
-                    else log.add("${sp.name}, ${ownerP.name} oyuncusunun gemisini batırdı")
+                    else log.add("${sp.name}, ${ownerP?.name} oyuncusunun gemisini batırdı")
                     // Sahibi tamamen bitti mi?
                     if (ownerP != null && ownerP.alive && ownerP.ships.all { it.sunk }) {
                         ownerP.alive = false
@@ -399,7 +405,7 @@ class GameServer {
         }
         val lj = JSONArray()
         log.takeLast(8).forEach { lj.put(it) }
-        return JSONObject()
+        val obj = JSONObject()
             .put("t", "state")
             .put("phase", phase.name)
             .put("host", hostId)
@@ -412,6 +418,22 @@ class GameServer {
             .put("players", pj)
             .put("shots", sj)
             .put("log", lj)
+            .put("sunkSeq", sunkSeq)
+            .put("sunkBy", sunkBy)
+            .put("sunkOwner", sunkOwner)
+        // Oyun bitince tüm gemilerin yerini aç
+        if (phase == Phase.OVER) {
+            val rj = JSONArray()
+            players.values.forEach { p ->
+                p.ships.forEach { ship ->
+                    val cells = JSONArray()
+                    ship.cells.forEach { c -> cells.put(JSONArray().put(c.first).put(c.second)) }
+                    rj.put(JSONObject().put("owner", p.id).put("color", p.color).put("cells", cells))
+                }
+            }
+            obj.put("reveal", rj)
+        }
+        return obj
     }
 
     private fun broadcastState() {
