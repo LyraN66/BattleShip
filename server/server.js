@@ -303,7 +303,7 @@ function yourShipsMsg(room, p) {
 function stateMsg(room) {
   const players = [...room.players.values()].map((p) => ({
     id: p.id, name: p.name, color: p.color, alive: p.alive, connected: p.connected,
-    ready: p.ready, hits: p.hits, sunk: p.sunkCount,
+    ready: p.ready, hits: p.hits, sunk: p.sunkCount, voice: !!p.voiceOn,
     shipsLeft: (p.ships || []).filter((s) => !shipSunk(s)).length,
   }));
   const shots = [...room.shots.entries()].map(([k, s]) => {
@@ -374,7 +374,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "created", code, id, host: true, token });
       send(ws, { t: "welcome", id, host: true, token });
@@ -391,7 +391,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       const color = room.players.size % 8;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "welcome", id, host: false, token });
       broadcast(room);
@@ -438,6 +438,13 @@ function handle(ws, m) {
       } else if (m.t === "rematch") {
         if (pid !== room.hostId || room.phase !== "OVER") return;
         resetForRematch(room);
+      } else if (m.t === "voice") {
+        const p = room.players.get(pid); if (p) p.voiceOn = !!m.on;
+        broadcast(room);
+      } else if (m.t === "rtc") {
+        // WebRTC sinyalini hedef oyuncuya ilet
+        const target = room.players.get(m.to | 0);
+        if (target && target.ws) send(target.ws, { t: "rtc", from: pid, data: m.data });
       }
     }
   }
