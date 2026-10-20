@@ -32,6 +32,10 @@ function makeCode() {
   return code;
 }
 
+function makeToken() {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
 function newRoom(code) {
   return {
     code,
@@ -340,12 +344,13 @@ function handle(ws, m) {
       const room = newRoom(code);
       rooms.set(code, room);
       const id = room.nextId++;
+      const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws, token, graceTimer: null };
       room.players.set(id, p);
-      send(ws, { t: "created", code, id, host: true });
-      send(ws, { t: "welcome", id, host: true });
+      send(ws, { t: "created", code, id, host: true, token });
+      send(ws, { t: "welcome", id, host: true, token });
       broadcast(room);
       break;
     }
@@ -356,11 +361,28 @@ function handle(ws, m) {
       if (room.phase !== "LOBBY") { send(ws, { t: "error", msg: "Oyun başladı, katılım kapalı." }); return; }
       if (room.players.size >= 8) { send(ws, { t: "error", msg: "Oda dolu (en fazla 8)." }); return; }
       const id = room.nextId++;
+      const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       const color = room.players.size % 8;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], ws, token, graceTimer: null };
       room.players.set(id, p);
-      send(ws, { t: "welcome", id, host: false });
+      send(ws, { t: "welcome", id, host: false, token });
+      broadcast(room);
+      break;
+    }
+    case "resume": {
+      const code = (m.code || "").toUpperCase().trim();
+      const room = rooms.get(code);
+      if (!room) { send(ws, { t: "error", msg: "Oda artık yok" }); return; }
+      let found = null;
+      for (const p of room.players.values()) { if (p.token && p.token === m.token) { found = p; break; } }
+      if (!found) { send(ws, { t: "error", msg: "Oturum bulunamadı" }); return; }
+      if (found.graceTimer) { clearTimeout(found.graceTimer); found.graceTimer = null; }
+      found.ws = ws; found.connected = true;
+      ws.roomCode = code; ws.playerId = found.id;
+      send(ws, { t: "welcome", id: found.id, host: found.id === room.hostId, token: found.token });
+      if (room.phase !== "LOBBY") send(ws, yourShipsMsg(room, found));
+      room.log.push(`${found.name} yeniden bağlandı`);
       broadcast(room);
       break;
     }
@@ -391,13 +413,25 @@ function handle(ws, m) {
   }
 }
 
+const GRACE_MS = 90000; // kısa kopukluklarda (uygulama değiştirme vb.) oyuncuyu hemen atma
+
 function onDisconnect(ws) {
   const room = rooms.get(ws.roomCode);
   if (!room) return;
   const pid = ws.playerId;
   const p = room.players.get(pid);
   if (!p) return;
+  if (p.ws !== ws) return; // eski/başka bağlantının kapanması (resume sonrası) — yok say
   p.connected = false;
+  if (p.graceTimer) clearTimeout(p.graceTimer);
+  p.graceTimer = setTimeout(() => finalizeLeave(room, pid), GRACE_MS);
+  broadcast(room);
+}
+
+function finalizeLeave(room, pid) {
+  const p = room.players.get(pid);
+  if (!p || p.connected) return; // geri bağlandıysa iptal
+  p.graceTimer = null;
   room.log.push(`${p.name} ayrıldı`);
   if (room.phase === "LOBBY") {
     room.players.delete(pid);
@@ -411,8 +445,9 @@ function onDisconnect(ws) {
     if (wasTurn) room.epoch++;
     if (!checkOver(room) && wasTurn) startTurnTimer(room);
   }
-  // Oda boşaldıysa temizle
-  if ([...room.players.values()].every((pp) => !pp.connected)) {
+  const anyConn = [...room.players.values()].some((pp) => pp.connected);
+  const anyGrace = [...room.players.values()].some((pp) => pp.graceTimer);
+  if (!anyConn && !anyGrace) {
     if (room.timer) clearTimeout(room.timer);
     rooms.delete(room.code);
     return;

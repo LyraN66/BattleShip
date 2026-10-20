@@ -172,22 +172,43 @@ let myShips=[], players=[], shots=[], w=10, h=10, turn=-1, deadline=0, log=[], r
 let lastSunkSeq=0, readySent=false, timerIv=null;
 let prevShotKeys=new Set(), pendingFx=[], prevPhase="";
 let ultiPlayer=-1, ultiLeft=0, ultiBy="", lastUltiSeq=0;
+let sessionToken=null, leaving=false, reconnecting=false, reconnectTries=0, reconnTimer=null;
 
 $('name').value = localStorage.getItem('name')||"";
 $('name').oninput = ()=>localStorage.setItem('name',$('name').value);
 $('joinCode').oninput = ()=>{ $('joinCode').value = $('joinCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4); };
 
 function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host; }
-function connect(hello){
-  showErr('');
+function openSocket(hello){
   ws = new WebSocket(wsUrl());
-  ws.onopen = ()=>ws.send(JSON.stringify(hello));
+  ws.onopen = ()=>{ try{ws.send(JSON.stringify(hello));}catch(e){} };
   ws.onmessage = e=>onMsg(JSON.parse(e.data));
-  ws.onclose = ()=>{ if(phase!=='OVER') showErr('Bağlantı kesildi'); };
-  ws.onerror = ()=>showErr('Bağlantı hatası');
+  ws.onclose = ()=>{
+    if(leaving) return;
+    if(sessionToken && roomCode){
+      // uygulama değiştirme/ağ kopması: aynı oturuma otomatik geri bağlan
+      if(reconnectTries<12){ reconnecting=true; reconnectTries++; showReconnecting(); clearTimeout(reconnTimer); reconnTimer=setTimeout(()=>openSocket({t:'resume',code:roomCode,token:sessionToken}), Math.min(2500, 400*reconnectTries)); }
+      else { reconnecting=false; showErr('Yeniden bağlanılamadı. Sayfayı yenileyin.'); }
+    } else if(phase!=='OVER'){ showErr('Bağlantı kesildi'); }
+  };
+  ws.onerror = ()=>{};
 }
+function connect(hello){ leaving=false; reconnecting=false; reconnectTries=0; sessionToken=null; showErr(''); openSocket(hello); }
 function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
-function showErr(m){ const e=$('err'); e.textContent=m?('❌ '+m):''; e.classList.toggle('hidden',!m); }
+function showErr(m){ const e=$('err'); e.textContent=m?('❌ '+m):''; e.style.color=''; e.classList.toggle('hidden',!m); }
+function showReconnecting(){ const e=$('err'); e.textContent='🔄 Yeniden bağlanılıyor…'; e.style.color='#ffd27a'; e.classList.remove('hidden'); }
+// Uygulamaya geri dönünce / ağ gelince hemen dene
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') maybeReconnect(); });
+window.addEventListener('online', maybeReconnect);
+window.addEventListener('focus', maybeReconnect);
+function maybeReconnect(){
+  if(leaving || !sessionToken || !roomCode) return;
+  if(ws && ws.readyState===1) return;        // zaten bağlı
+  if(ws && ws.readyState===0) return;         // bağlanıyor
+  clearTimeout(reconnTimer); reconnTimer=null;
+  reconnectTries=0; reconnecting=true; showReconnecting();
+  openSocket({t:'resume',code:roomCode,token:sessionToken});
+}
 
 $('btnCreate').onclick=()=>{ const n=$('name').value.trim(); if(!n)return showErr('Önce adını yaz'); connect({t:'create',name:n}); };
 $('btnJoin').onclick=()=>{ const n=$('name').value.trim(); const c=$('joinCode').value.trim(); if(!n)return showErr('Önce adını yaz'); if(c.length<4)return showErr('4 haneli kodu gir'); connect({t:'join',code:c,name:n}); };
@@ -197,12 +218,12 @@ $('btnReady').onclick=()=>{ send({t:'ready'}); $('btnReady').disabled=true; $('b
 $('shipsSlider').oninput=()=>{ $('shipsVal').textContent=$('shipsSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 $('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 
-function leave(){ try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
+function leave(){ leaving=true; reconnecting=false; sessionToken=null; clearTimeout(reconnTimer); try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
 
 function onMsg(m){
-  if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; }
-  else if(m.t==='welcome'){ myId=m.id; isHost=!!m.host; }
-  else if(m.t==='error'){ showErr(m.msg); }
+  if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
+  else if(m.t==='welcome'){ myId=m.id; isHost=!!m.host; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
+  else if(m.t==='error'){ if(reconnecting){ reconnecting=false; sessionToken=null; try{ws&&ws.close();}catch(e){} ws=null; } showErr(m.msg); }
   else if(m.t==='yourships'){ w=m.w; h=m.h; myShips=m.ships||[]; }
   else if(m.t==='state'){
     phase=m.phase; w=m.w; h=m.h; turn=m.turn; deadline=m.deadline; winner=m.winner;
