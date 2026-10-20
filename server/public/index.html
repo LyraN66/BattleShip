@@ -38,7 +38,7 @@
   .cell.alt{background:var(--waterAlt)}
   /* kendi gemin: parlak çelik + iç çerçeve + hafif gölge → belirgin */
   .cell.ship{background:#cfdae8;box-shadow:inset 0 0 0 2px rgba(255,255,255,.65), 0 0 6px rgba(180,210,255,.35)}
-  .cell.hit{background:#5e2020}      /* düşman gemisi vuruldu (koyu kırmızı) */
+  .cell.hit{background:#b23232}      /* düşman gemisi vuruldu (daha parlak kırmızı) */
   .cell.ownhit{background:var(--shipHit)}
   .cell.faded{background:#071726}    /* ıska → sönmüş su, geri plana düşer */
   .cell .miss{width:16%;height:16%;border-radius:50%;background:rgba(200,220,240,.16)}
@@ -78,6 +78,7 @@
   .flash.anim{animation:flashin .45s cubic-bezier(.2,1.4,.4,1)}
   @keyframes flashin{0%{transform:translateX(-50%) scale(.5) rotate(-4deg);opacity:0}70%{transform:translateX(-50%) scale(1.12) rotate(2deg)}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -398,6 +399,7 @@ function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;
 // --- Radyo (https yayınlar; ses telefon tuşlarından) ---
 const STATIONS=[
   {n:"PowerTürk", u:"https://listen.powerapp.com.tr/powerturk/mpeg/icecast.audio"},
+  {n:"Kral Pop", u:"https://ssldyg.radyotvonline.com/smil/smil:kralpop.smil/playlist.m3u8"},
   {n:"Power Pop", u:"https://listen.powerapp.com.tr/powerpop/mpeg/icecast.audio"},
   {n:"Power FM", u:"https://listen.powerapp.com.tr/powerfm/mpeg/icecast.audio"},
   {n:"PowerTürk Slow", u:"https://listen.powerapp.com.tr/powerturkslow/mpeg/icecast.audio"},
@@ -405,17 +407,27 @@ const STATIONS=[
   {n:"Power Dance", u:"https://listen.powerapp.com.tr/powerdance/mpeg/icecast.audio"},
 ];
 const radio=new Audio(); radio.preload='none';
-let curStation=-1, radioPlaying=false;
+let curStation=-1, radioPlaying=false, hls=null;
 function radioStatus(m){ $('radioMsg').textContent=m||''; }
 function renderRadio(){
   $('radioChips').innerHTML=STATIONS.map((s,i)=>`<button class="rchip ${i===curStation?'on':''}" onclick="pickStation(${i})">${esc(s.n)}</button>`).join('');
   $('radioToggle').textContent = radioPlaying?'⏸':'▶';
   $('radioNow').textContent = curStation>=0?STATIONS[curStation].n:'—';
 }
+function loadStation(url){
+  if(hls){ try{hls.destroy();}catch(e){} hls=null; }
+  const isHls = url.indexOf('.m3u8')>=0;
+  if(isHls && window.Hls && window.Hls.isSupported()){
+    hls=new Hls(); hls.loadSource(url); hls.attachMedia(radio);
+    return radio.play();
+  }
+  radio.src=url;   // Safari HLS'i yerel oynatır; diğer yayınlar da buradan
+  return radio.play();
+}
 function pickStation(i){
   if(i===curStation){ toggleRadio(); return; }
-  curStation=i; radioStatus(''); radio.src=STATIONS[i].u;
-  radio.play().then(()=>{radioPlaying=true;renderRadio();}).catch(()=>{radioStatus('Çalınamadı, başka istasyon dene');});
+  curStation=i; radioStatus('');
+  loadStation(STATIONS[i].u).then(()=>{radioPlaying=true;renderRadio();}).catch(()=>{radioStatus('Çalınamadı, başka istasyon dene');});
   renderRadio();
 }
 function toggleRadio(){
