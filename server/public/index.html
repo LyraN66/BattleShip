@@ -33,7 +33,7 @@
   .banner{border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin:8px 0}
   .banner .name{font-size:20px;font-weight:700}
   .timer{font-size:30px;font-weight:700}
-  #board{display:grid;gap:2px;width:100%;max-width:460px;margin:8px auto;aspect-ratio:1/1}
+  #board,#overBoard{display:grid;gap:2px;width:100%;max-width:460px;margin:8px auto;aspect-ratio:1/1}
   .cell{background:var(--water);border-radius:2px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:3.4vw;user-select:none;overflow:hidden;min-width:0;min-height:0}
   .cell.alt{background:var(--waterAlt)}
   .cell.ship{background:var(--ship)}
@@ -46,7 +46,7 @@
   .flash{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#b71c1c;border-radius:14px;padding:14px 22px;text-align:center;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.4)}
   .flash b{font-size:20px}
   .slider{width:100%}
-  .reveal #board{max-width:380px}
+  #overBoard{max-width:380px}
   .footer{margin-top:22px;display:flex;justify-content:space-between;align-items:center;padding:4px 2px 24px}
   .footer a{color:var(--muted);font-size:13px;text-decoration:none}
   .footer a:hover{text-decoration:underline}
