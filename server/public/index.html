@@ -47,12 +47,15 @@
   .flash b{font-size:20px}
   .slider{width:100%}
   .reveal #board{max-width:380px}
+  .footer{margin-top:22px;display:flex;justify-content:space-between;align-items:center;padding:4px 2px 24px}
+  .footer a{color:var(--muted);font-size:13px;text-decoration:none}
+  .footer a:hover{text-decoration:underline}
+  .footer .credit{color:#6b7a8d;font-size:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>⚓ Amiral Battı</h1>
-  <div class="sub">İnternetten çok oyunculu — iOS, Android, PC birlikte</div>
   <div id="err" class="err hidden"></div>
 
   <!-- HOME -->
@@ -116,6 +119,10 @@
     <div id="overBoard"></div>
     <div id="overLegend" class="players" style="justify-content:center;margin-top:8px"></div>
     <button onclick="leave()">Ana menüye dön</button>
+  </div>
+  <div class="footer">
+    <a href="https://github.com/LyraN66/BattleShip" target="_blank" rel="noopener">Kaynak kod · GitHub</a>
+    <span class="credit">designed by Buğra</span>
   </div>
 </div>
 
