@@ -51,6 +51,13 @@
   .footer a{color:var(--muted);font-size:13px;text-decoration:none}
   .footer a:hover{text-decoration:underline}
   .footer .credit{color:#6b7a8d;font-size:12px}
+  .radio .rtop{display:flex;align-items:center;gap:10px}
+  .rnow{color:var(--muted);font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rtoggle{width:auto;padding:8px 16px;margin:0;background:var(--btn2);font-size:18px}
+  .rchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .rchip{width:auto;margin:0;padding:8px 12px;background:#0a2238;border:1px solid var(--line);font-size:13px;font-weight:500}
+  .rchip.on{background:var(--btn);border-color:var(--btn)}
+  .rmsg{color:#ff9b9b;font-size:12px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -120,6 +127,16 @@
     <div id="overLegend" class="players" style="justify-content:center;margin-top:8px"></div>
     <button onclick="leave()">Ana menüye dön</button>
   </div>
+  <div class="radio card">
+    <div class="rtop">
+      <span>📻 Radyo</span>
+      <span id="radioNow" class="rnow">—</span>
+      <button id="radioToggle" class="rtoggle" onclick="toggleRadio()">▶</button>
+    </div>
+    <div id="radioChips" class="rchips"></div>
+    <div id="radioMsg" class="rmsg"></div>
+  </div>
+
   <div class="footer">
     <a href="https://github.com/LyraN66/BattleShip" target="_blank" rel="noopener">Kaynak kod · GitHub</a>
     <span class="credit">designed by Buğra</span>
@@ -280,6 +297,38 @@ function drawBoard(container, interactive){
 
 function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// --- Radyo (https yayınlar; ses telefon tuşlarından) ---
+const STATIONS=[
+  {n:"Radio Paradise", u:"https://stream.radioparadise.com/mp3-128"},
+  {n:"RP Chill", u:"https://stream.radioparadise.com/mellow-128"},
+  {n:"RP Rock", u:"https://stream.radioparadise.com/rock-128"},
+  {n:"Groove Salad", u:"https://ice1.somafm.com/groovesalad-128-mp3"},
+  {n:"Lo-Fi Beats", u:"https://ice1.somafm.com/fluid-128-mp3"},
+  {n:"Drone Zone", u:"https://ice1.somafm.com/dronezone-128-mp3"},
+];
+const radio=new Audio(); radio.preload='none';
+let curStation=-1, radioPlaying=false;
+function radioStatus(m){ $('radioMsg').textContent=m||''; }
+function renderRadio(){
+  $('radioChips').innerHTML=STATIONS.map((s,i)=>`<button class="rchip ${i===curStation?'on':''}" onclick="pickStation(${i})">${esc(s.n)}</button>`).join('');
+  $('radioToggle').textContent = radioPlaying?'⏸':'▶';
+  $('radioNow').textContent = curStation>=0?STATIONS[curStation].n:'—';
+}
+function pickStation(i){
+  if(i===curStation){ toggleRadio(); return; }
+  curStation=i; radioStatus(''); radio.src=STATIONS[i].u;
+  radio.play().then(()=>{radioPlaying=true;renderRadio();}).catch(()=>{radioStatus('Çalınamadı, başka istasyon dene');});
+  renderRadio();
+}
+function toggleRadio(){
+  if(curStation<0){ pickStation(0); return; }
+  if(radioPlaying){ radio.pause(); } else { radio.play().catch(()=>radioStatus('Çalınamadı, başka istasyon dene')); }
+}
+radio.onplaying=()=>{ radioPlaying=true; renderRadio(); };
+radio.onpause=()=>{ radioPlaying=false; renderRadio(); };
+radio.onerror=()=>{ radioPlaying=false; radioStatus('Çalınamadı, başka istasyon dene'); renderRadio(); };
+renderRadio();
 
 render();
 </script>
