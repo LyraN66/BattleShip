@@ -48,6 +48,9 @@ private val PLAYER_COLORS = listOf(
 )
 private fun colorOf(i: Int) = PLAYER_COLORS[i % PLAYER_COLORS.size]
 
+// Varsayılan internet sunucusu (Render). Kullanıcı isterse değiştirebilir.
+private const val DEFAULT_SERVER = "battleship-wp5m.onrender.com"
+
 class MainActivity : ComponentActivity() {
     private val state = BattleState()
 
@@ -140,7 +143,7 @@ private fun HomeScreen(s: BattleState) {
         if (inet) {
             val ctx = LocalContext.current
             val prefs = remember { ctx.getSharedPreferences("bs", Context.MODE_PRIVATE) }
-            var url by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
+            var url by remember { mutableStateOf(prefs.getString("server_url", DEFAULT_SERVER) ?: DEFAULT_SERVER) }
             var code by remember { mutableStateOf("") }
             Text("🌐 İnternetten oyna (aynı ağ gerekmez)", color = Color(0xFF9FB3C8))
             OutlinedTextField(
