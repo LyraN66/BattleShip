@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Nişangah halkası -->
+    <path
+        android:pathData="M54,24 a30,30 0 1,0 0.01,0 z"
+        android:strokeColor="#33FFFFFF" android:strokeWidth="2.5" android:fillColor="#00000000" />
+
+    <!-- Savaş gemisi gövdesi -->
+    <path
+        android:pathData="M26,62 L32,56 L80,56 L86,62 L80,70 L32,70 Z"
+        android:fillColor="#FFF4F8FF" />
+    <!-- Su hattı (altın şerit) -->
+    <path
+        android:pathData="M30,66 L82,66"
+        android:strokeColor="#FFF2B340" android:strokeWidth="2.5" />
+
+    <!-- Köprü üstü yapı -->
+    <path
+        android:pathData="M44,56 L44,47 L60,47 L60,56 Z"
+        android:fillColor="#FFCDD8E8" />
+    <!-- Baca -->
+    <path
+        android:pathData="M47,47 L47,41 L53,41 L53,47 Z"
+        android:fillColor="#FFE7EEF8" />
+    <!-- Ana top kulesi + namlu -->
+    <path
+        android:pathData="M34,56 L34,52 L42,52 L42,56 Z"
+        android:fillColor="#FFE7EEF8" />
+    <path
+        android:pathData="M38,53 L26,50"
+        android:strokeColor="#FFE7EEF8" android:strokeWidth="2" />
+    <!-- Direk -->
+    <path
+        android:pathData="M63,47 L68,36"
+        android:strokeColor="#FFF4F8FF" android:strokeWidth="2" />
+
+    <!-- Nişan çarpısı uçları -->
+    <path
+        android:pathData="M54,18 L54,27 M54,81 L54,90 M18,54 L27,54 M81,54 L90,54"
+        android:strokeColor="#66FFFFFF" android:strokeWidth="2.5" />
+</vector>
