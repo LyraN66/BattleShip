@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <!-- Yerel ağ (LAN host) ve TLS'siz özel sunucular için düz bağlantıya izin ver.
-         Render gibi adresler zaten wss/https (şifreli) kullanır. -->
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>

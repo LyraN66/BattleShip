@@ -1,29 +1,49 @@
-# Amiral Battı (Android, yerel ağ çok oyunculu)
+# ⚓ Amiral Battı — Online Çok Oyunculu
 
-Aynı WiFi/hotspot üzerindeki kişilerin birlikte oynadığı Amiral Battı.
+Tarayıcıdan oynanan, internet üzerinden çok oyunculu Amiral Battı.
+**iOS, Android ve PC** aynı anda, tek bir bağlantıyla birlikte oynar — kurulum yok.
 
-## Nasıl oynanır
-1. Biri **Oda Kur**'a basar (host). Ekranda bir **QR kod** ve **IP:port** çıkar.
-2. Diğerleri **Odaya Katıl → QR okut** (ya da kodu elle girer).
-3. Host **gemi sayısı** ve **el süresini** ayarlar, **Başlat**'a basar.
-4. Sistem herkese tek ortak haritada gemilerini yerleştirir; herkes **Onayla**'ya basar.
-5. Sırayla ateş edilir. **İsabette tekrar atarsın**, ıskada sıra geçer.
-6. Gemileri biten **elenir**, **son kalan kazanır**.
+## 🎮 Oyna
+Oda kurup arkadaşlarına **4 harfli kodu** gönder, onlar da koda katılsın.
 
-- Tek ortak harita: kendi gemilerini görürsün, rakip gemileri gizlidir; isabet/ıska işaretleri herkese görünür.
-- El süresi dolarsa sistem senin yerine rastgele atar.
-- İnternet gerekmez; host sunucu, diğerleri soketle bağlanır.
+> Oyun tek bir ortak harita üzerinde oynanır: kendi gemilerini görürsün, rakip gemileri gizlidir;
+> herkesin attığı isabet/ıska işaretleri paylaşılır.
 
-## Teknoloji
-- Kotlin + Jetpack Compose
-- TCP soket (host = sunucu), JSON protokol
-- ZXing (QR üretimi + tarama)
-- Android 8.0+ (minSdk 26)
+### Nasıl oynanır
+1. İsmini yaz → **Oda Kur** (bir kod üretir) ya da **Koda Katıl**.
+2. Host gemi sayısını ve el süresini ayarlar, **Başlat**'a basar.
+3. Sistem herkesin gemilerini ortak haritaya yerleştirir; herkes **Onayla**'ya basar.
+4. Sırayla ateş: **isabette tekrar atarsın**, ıskada sıra geçer.
+5. Gemileri biten **elenir**, **son kalan kazanır**. Oyun bitince **Tekrar Oyna** ile aynı odada yeni tur.
 
-## APK
-Her `push` sonrası GitHub Actions APK'yı derler ve **Releases › son-surum** altında
-`AmiralBatti.apk` olarak yayınlar.
+## ✨ Özellikler
+- **Oda kodu** ile buluşma (aynı ağ gerekmez), 2–8 oyuncu.
+- **Tetris benzeri gemi şekilleri**: düz, L, T, S/Z zikzak, 2×2 kare — rastgele döndürülüp yerleştirilir.
+- **ULTI**: Bir gemiyi tek sıranda tek başına batırırsan 4 bombalık ulti kazanırsın (zincirlenebilir).
+- **Efektler**: vuruş patlaması, ekran sarsıntısı, titreşim, batırma uyarısı, konfeti, sıra parlaması.
+- **Radyo**: oyun oynarken dinlenebilen Türkçe istasyonlar.
+- **Otomatik yeniden bağlanma**: uygulama değiştirip geri dönünce aynı odaya bağlanırsın.
+- **Tekrar oyna**: oyun bitince aynı oda/kodla yeni oyun.
 
-## Not
-Bazı hotspot'lar cihazları birbirinden yalıtır (AP isolation); öyleyse bağlantı kurulmaz.
-Test için en az 2 cihaz gerekir.
+## 🖥️ Sunucu (kendin çalıştırmak istersen)
+Oyun sunucusu `server/` klasöründe (Node.js + WebSocket). Statik web istemcisi de aynı sunucudan servis edilir.
+
+### Ücretsiz dağıtım (Render)
+`render.yaml` hazır. Render'da **New → Blueprint** ya da **Web Service** ile depoyu bağla:
+- Root Directory: `server`
+- Build: `npm install`
+- Start: `node server.js`
+
+### Yerelde
+```bash
+cd server
+npm install
+node server.js      # http://localhost:8080
+```
+
+## 🛠️ Teknoloji
+- Sunucu: Node.js + `ws` (WebSocket). Oyun kuralları sunucuda (authoritative), birden çok oda.
+- İstemci: tek dosyalık HTML/CSS/JS (çerçeve yok). HLS radyo için hls.js.
+
+---
+designed by Buğra

@@ -1,6 +1,4 @@
-.gradle/
-build/
-local.properties
-.idea/
-*.iml
+node_modules/
 server/node_modules/
+.DS_Store
+*.log
