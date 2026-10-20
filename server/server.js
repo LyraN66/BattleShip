@@ -266,6 +266,12 @@ const server = http.createServer((req, res) => {
     res.end("ok rooms " + rooms.size);
     return;
   }
+  // Çalışan sürümün commit'i (dağıtım doğrulaması için). /v/<herhangi> da aynı yanıtı verir.
+  if (req.url === "/version" || req.url.startsWith("/v/")) {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end(process.env.RENDER_GIT_COMMIT || "unknown");
+    return;
+  }
   // Web oyun istemcisini servis et
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(PAGE || "Amiral Batti sunucusu calisiyor.");
