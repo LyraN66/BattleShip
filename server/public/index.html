@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Amiral Battı</title>
+<style>
+  :root{
+    --bg:#07192B; --panel:#0E2C49; --panel2:#0B3C5D; --muted:#9FB3C8; --line:#1d496e;
+    --btn:#7C4DFF; --btn2:#2b2e6b; --water:#0B3C5D; --waterAlt:#0E456B; --ship:#B0BEC5; --shipHit:#7F1D1D;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:520px;margin:0 auto;padding:18px}
+  h1{font-size:26px;margin:10px 0 2px;text-align:center}
+  .sub{color:var(--muted);text-align:center;font-size:13px;margin-bottom:14px}
+  .card{background:var(--panel);border-radius:14px;padding:14px;margin:10px 0}
+  label{display:block;color:var(--muted);font-size:13px;margin:8px 0 4px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0a2238;color:#fff;font-size:16px}
+  input.code{text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:24px;font-family:monospace}
+  button{width:100%;padding:14px;border:0;border-radius:12px;background:var(--btn);color:#fff;font-size:16px;font-weight:600;margin-top:10px;cursor:pointer}
+  button.sec{background:var(--btn2)}
+  button.ghost{background:transparent;color:var(--muted);font-weight:400}
+  button:disabled{opacity:.5}
+  .row{display:flex;gap:8px}
+  .row>button{margin-top:0}
+  .hidden{display:none !important}
+  .err{color:#ff6b6b;text-align:center;margin:8px 0}
+  .code-big{font-family:monospace;font-size:44px;letter-spacing:8px;text-align:center;margin:6px 0}
+  .players{display:flex;flex-wrap:wrap;gap:8px}
+  .pchip{display:flex;align-items:center;gap:6px;background:var(--panel2);padding:6px 10px;border-radius:8px;font-size:13px}
+  .dot{width:14px;height:14px;border-radius:4px;display:inline-block}
+  .banner{border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin:8px 0}
+  .banner .name{font-size:20px;font-weight:700}
+  .timer{font-size:30px;font-weight:700}
+  #board{display:grid;gap:2px;width:100%;max-width:460px;margin:8px auto;aspect-ratio:1/1}
+  .cell{background:var(--water);border-radius:2px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:3.4vw;user-select:none}
+  .cell.alt{background:var(--waterAlt)}
+  .cell.ship{background:var(--ship)}
+  .cell.ownhit{background:var(--shipHit)}
+  @media(min-width:520px){.cell{font-size:18px}}
+  .pstrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .pbox{min-width:64px;text-align:center;background:var(--panel2);border-radius:8px;padding:6px;font-size:12px}
+  .pbox.turn{outline:2px solid #fff}
+  .log{font-size:12px;color:#c8d6e5}
+  .flash{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#b71c1c;border-radius:14px;padding:14px 22px;text-align:center;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  .flash b{font-size:20px}
+  .slider{width:100%}
+  .reveal #board{max-width:380px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚓ Amiral Battı</h1>
+  <div class="sub">İnternetten çok oyunculu — iOS, Android, PC birlikte</div>
+  <div id="err" class="err hidden"></div>
+
+  <!-- HOME -->
+  <div id="home" class="card">
+    <label>Adın</label>
+    <input id="name" maxlength="14" placeholder="Adın" />
+    <button id="btnCreate">Oda Kur (kod üret)</button>
+    <label>veya bir odaya katıl</label>
+    <input id="joinCode" class="code" maxlength="4" placeholder="KOD" />
+    <button id="btnJoin" class="sec">Koda Katıl</button>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="lobby" class="card hidden">
+    <div style="text-align:center;color:var(--muted)">Oda Kodu</div>
+    <div id="lobbyCode" class="code-big"></div>
+    <button id="btnCopy" class="sec">Kodu kopyala</button>
+    <div id="lobbyHint" class="sub"></div>
+    <div class="card" style="background:var(--panel2)">
+      <div id="lobbyPlayers" class="players"></div>
+    </div>
+    <div id="hostSettings" class="hidden">
+      <label>Her oyuncunun gemi sayısı: <span id="shipsVal">4</span></label>
+      <input id="shipsSlider" class="slider" type="range" min="2" max="6" value="4" />
+      <label>El süresi: <span id="turnVal">25</span> sn</label>
+      <input id="turnSlider" class="slider" type="range" min="10" max="60" step="5" value="25" />
+      <button id="btnStart">Başlat</button>
+    </div>
+    <button class="ghost" onclick="leave()">← Menü</button>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" class="hidden">
+    <div id="placingBox" class="card hidden">
+      <div style="font-weight:600">Gemilerin yerleştirildi</div>
+      <div class="sub">Haritada kendi gemilerini gör, onayla</div>
+      <button id="btnReady">Onayla ve Hazırım</button>
+    </div>
+    <div id="turnBanner" class="banner hidden">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="turnDot" class="dot" style="width:22px;height:22px"></span>
+        <span id="turnName" class="name"></span>
+      </div>
+      <span id="turnTimer" class="timer"></span>
+    </div>
+    <div id="board"></div>
+    <div id="pstrip" class="pstrip"></div>
+    <div class="card"><div id="log" class="log"></div></div>
+    <button class="ghost" onclick="leave()">← Çık</button>
+  </div>
+
+  <!-- OVER -->
+  <div id="over" class="card hidden reveal">
+    <div style="text-align:center;font-size:48px">🏆</div>
+    <div id="winner" style="text-align:center;font-size:22px;font-weight:700"></div>
+    <div class="card" style="background:var(--panel2)">
+      <div style="font-weight:600;margin-bottom:6px">Skorlar</div>
+      <div id="scores"></div>
+    </div>
+    <div style="text-align:center;color:var(--muted);margin:6px 0">Gemiler neredeydi</div>
+    <div id="overBoard"></div>
+    <div id="overLegend" class="players" style="justify-content:center;margin-top:8px"></div>
+    <button onclick="leave()">Ana menüye dön</button>
+  </div>
+</div>
+
+<div id="flash" class="flash hidden"></div>
+
+<script>
+const COLORS=["#E53935","#1E88E5","#43A047","#FDD835","#8E24AA","#FB8C00","#00ACC1","#D81B60"];
+const colorOf=i=>COLORS[((i%8)+8)%8];
+const $=id=>document.getElementById(id);
+const show=(id,on)=>$(id).classList.toggle('hidden',!on);
+
+let ws=null, st={}, myId=-1, isHost=false, phase="", roomCode=null;
+let myShips=[], players=[], shots=[], w=10, h=10, turn=-1, deadline=0, log=[], reveal=null, winner=-1;
+let lastSunkSeq=0, readySent=false, timerIv=null;
+
+$('name').value = localStorage.getItem('name')||"";
+$('name').oninput = ()=>localStorage.setItem('name',$('name').value);
+$('joinCode').oninput = ()=>{ $('joinCode').value = $('joinCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4); };
+
+function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host; }
+function connect(hello){
+  showErr('');
+  ws = new WebSocket(wsUrl());
+  ws.onopen = ()=>ws.send(JSON.stringify(hello));
+  ws.onmessage = e=>onMsg(JSON.parse(e.data));
+  ws.onclose = ()=>{ if(phase!=='OVER') showErr('Bağlantı kesildi'); };
+  ws.onerror = ()=>showErr('Bağlantı hatası');
+}
+function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+function showErr(m){ const e=$('err'); e.textContent=m?('❌ '+m):''; e.classList.toggle('hidden',!m); }
+
+$('btnCreate').onclick=()=>{ const n=$('name').value.trim(); if(!n)return showErr('Önce adını yaz'); connect({t:'create',name:n}); };
+$('btnJoin').onclick=()=>{ const n=$('name').value.trim(); const c=$('joinCode').value.trim(); if(!n)return showErr('Önce adını yaz'); if(c.length<4)return showErr('4 haneli kodu gir'); connect({t:'join',code:c,name:n}); };
+$('btnCopy').onclick=()=>{ if(roomCode) navigator.clipboard&&navigator.clipboard.writeText(roomCode); $('btnCopy').textContent='✓ Kopyalandı'; };
+$('btnStart').onclick=()=>send({t:'start'});
+$('btnReady').onclick=()=>{ send({t:'ready'}); $('btnReady').disabled=true; $('btnReady').textContent='Onaylandı, bekleniyor…'; };
+$('shipsSlider').oninput=()=>{ $('shipsVal').textContent=$('shipsSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
+$('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
+
+function leave(){ try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
+
+function onMsg(m){
+  if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; }
+  else if(m.t==='welcome'){ myId=m.id; isHost=!!m.host; }
+  else if(m.t==='error'){ showErr(m.msg); }
+  else if(m.t==='yourships'){ w=m.w; h=m.h; myShips=m.ships||[]; }
+  else if(m.t==='state'){
+    phase=m.phase; w=m.w; h=m.h; turn=m.turn; deadline=m.deadline; winner=m.winner;
+    players=m.players||[]; shots=m.shots||[]; log=m.log||[]; if(m.code) roomCode=m.code;
+    reveal=m.reveal||reveal;
+    if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); }
+    if(phase!=='PLACING'){ readySent=false; }
+  }
+  render();
+}
+
+function doFlash(by,owner){
+  const f=$('flash');
+  const sub = (by===owner||!owner) ? (by+' bir gemi batırdı') : (by+", "+owner+"'ın gemisini batırdı");
+  f.innerHTML='<b>💥 İçinden geçti!</b><br><span style="color:#ffd7d7">'+sub+'</span>';
+  f.classList.remove('hidden');
+  clearTimeout(f._t); f._t=setTimeout(()=>f.classList.add('hidden'),2000);
+}
+
+const myColor=()=>{ const p=players.find(p=>p.id===myId); return p?colorOf(p.color):'#888'; };
+const myTurn=()=>phase==='PLAYING'&&turn===myId;
+
+function render(){
+  const inRoom = !!ws;
+  show('home', !inRoom);
+  show('lobby', inRoom && (phase===''||phase==='LOBBY'));
+  show('game', inRoom && (phase==='PLACING'||phase==='PLAYING'));
+  show('over', inRoom && phase==='OVER');
+
+  if(phase===''||phase==='LOBBY'){
+    $('lobbyCode').textContent = roomCode||'…';
+    show('hostSettings', isHost);
+    $('lobbyHint').textContent = isHost ? "Arkadaşların bu kodla 'Koda Katıl' yapsın" : "Host'un başlatması bekleniyor…";
+    $('btnStart').disabled = players.length<2;
+    $('btnStart').textContent = players.length<2 ? 'En az 2 oyuncu gerekli' : 'Başlat';
+    $('lobbyPlayers').innerHTML = players.map(p=>`<span class="pchip"><span class="dot" style="background:${colorOf(p.color)}"></span>${esc(p.name)}${p.id===myId?' (sen)':''}</span>`).join('');
+  }
+
+  if(phase==='PLACING'||phase==='PLAYING'){
+    show('placingBox', phase==='PLACING');
+    show('turnBanner', phase==='PLAYING');
+    if(phase==='PLAYING'){
+      const cur=players.find(p=>p.id===turn);
+      const col=cur?colorOf(cur.color):'#888';
+      const b=$('turnBanner'); b.style.background = myTurn()?col:hexA(col,.22);
+      $('turnDot').style.background=col;
+      $('turnName').textContent = myTurn()?'🎯 SIRA SENDE':('Sıra: '+(cur?cur.name:'-'));
+    }
+    drawBoard($('board'), true);
+    $('pstrip').innerHTML = players.map(p=>{
+      const t=p.id===turn&&phase==='PLAYING';
+      return `<div class="pbox ${t?'turn':''}" style="${t?'background:'+hexA(colorOf(p.color),.3):''}">
+        <span class="dot" style="background:${colorOf(p.color)}"></span><br>
+        <span style="color:${p.alive?'#fff':'#6b7a8d'}">${esc(p.name)}</span><br>
+        <span style="color:var(--muted)">${p.alive?(p.shipsLeft+' gemi'):'elendi'}</span></div>`;
+    }).join('');
+    $('log').innerHTML = log.slice(-5).map(l=>'• '+esc(l)).join('<br>');
+    startTimer();
+  } else { if(timerIv){clearInterval(timerIv);timerIv=null;} }
+
+  if(phase==='OVER'){
+    const wn=players.find(p=>p.id===winner);
+    $('winner').textContent = wn?('Kazanan: '+wn.name):'Oyun bitti';
+    const sorted=[...players].sort((a,b)=>(b.sunk*100+b.hits)-(a.sunk*100+a.hits));
+    $('scores').innerHTML = sorted.map(p=>`<div style="display:flex;justify-content:space-between;margin:4px 0">
+      <span><span class="dot" style="background:${colorOf(p.color)}"></span> ${esc(p.name)}</span>
+      <span style="color:var(--muted)">${p.sunk} batırma · ${p.hits} isabet</span></div>`).join('');
+    drawBoard($('overBoard'), false);
+    $('overLegend').innerHTML = players.map(p=>`<span class="pchip"><span class="dot" style="background:${colorOf(p.color)}"></span>${esc(p.name)}</span>`).join('');
+  }
+}
+
+function startTimer(){
+  if(timerIv) clearInterval(timerIv);
+  timerIv=setInterval(()=>{
+    if(phase!=='PLAYING'||!deadline){ $('turnTimer').textContent=''; return; }
+    const r=Math.max(0,Math.round((deadline-Date.now())/1000));
+    const el=$('turnTimer'); el.textContent=r; el.style.color = r<=5?'#ff5252':'#fff';
+  },300);
+}
+
+function drawBoard(container, interactive){
+  const myCells=new Set(myShips.flat().map(c=>c[0]+','+c[1]));
+  const shotMap={}; shots.forEach(s=>shotMap[s.x+','+s.y]=s);
+  const revMap={}; if(reveal) reveal.forEach(r=>r.cells.forEach(c=>revMap[c[0]+','+c[1]]=r.color));
+  container.style.gridTemplateColumns=`repeat(${w},1fr)`;
+  let html='';
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const k=x+','+y, alt=(x+y)%2===1;
+    const mine=myCells.has(k), shot=shotMap[k], rev=revMap[k];
+    let cls='cell'+(alt?' alt':'');
+    let style='', mark='';
+    if(shot&&shot.hit&&mine) cls+=' ownhit';
+    else if(mine&&!shot) cls+=' ship';
+    if(rev!==undefined && !(mine)) style=`background:${hexA(colorOf(rev),.6)}`;
+    if(shot){
+      const sc=colorOf(shot.by);
+      mark = shot.hit ? `<span style="color:${sc}">✕</span>` : `<span style="color:${sc};font-size:1.6em;line-height:0">•</span>`;
+    }
+    const canFire = interactive && myTurn() && !shot;
+    html+=`<div class="${cls}" style="${style}" data-x="${x}" data-y="${y}" ${canFire?'data-fire=1':''}>${mark}</div>`;
+  }
+  container.innerHTML=html;
+  if(interactive){
+    container.querySelectorAll('[data-fire]').forEach(el=>{
+      el.onclick=()=>send({t:'fire',x:+el.dataset.x,y:+el.dataset.y});
+    });
+  }
+}
+
+function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+render();
+</script>
+</body>
+</html>

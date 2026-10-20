@@ -1,9 +1,13 @@
 // Amiral Battı - internet (WebSocket) oyun sunucusu
 // Oda kodu ile buluşma + tüm oyun kuralları. Birden çok oda aynı anda çalışır.
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 8080;
+let PAGE = "";
+try { PAGE = fs.readFileSync(path.join(__dirname, "public", "index.html")); } catch (e) {}
 
 // ---- Yardımcılar ----
 const key = (x, y) => `${x},${y}`;
@@ -257,8 +261,14 @@ function stateMsg(room) {
 
 // ---- Bağlantı ----
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Amiral Batti sunucusu calisiyor. Oda sayisi: " + rooms.size);
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("ok rooms " + rooms.size);
+    return;
+  }
+  // Web oyun istemcisini servis et
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(PAGE || "Amiral Batti sunucusu calisiyor.");
 });
 const wss = new WebSocketServer({ server });
 
