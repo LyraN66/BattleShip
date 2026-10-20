@@ -91,7 +91,7 @@
     <input id="name" maxlength="14" placeholder="Adın" />
     <button id="btnCreate">Oda Kur (kod üret)</button>
     <label>veya bir odaya katıl</label>
-    <input id="joinCode" class="code" maxlength="4" placeholder="KOD" />
+    <input id="joinCode" class="code" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" />
     <button id="btnJoin" class="sec">Koda Katıl</button>
   </div>
 
@@ -183,7 +183,7 @@ let sessionToken=null, leaving=false, reconnecting=false, reconnectTries=0, reco
 
 $('name').value = localStorage.getItem('name')||"";
 $('name').oninput = ()=>localStorage.setItem('name',$('name').value);
-$('joinCode').oninput = ()=>{ $('joinCode').value = $('joinCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4); };
+$('joinCode').oninput = ()=>{ $('joinCode').value = $('joinCode').value.replace(/[^0-9]/g,'').slice(0,4); };
 
 function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host; }
 function openSocket(hello){

@@ -40,11 +40,11 @@ function transformShape(cells) {
 const rooms = new Map(); // code -> room
 
 function makeCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const digits = "0123456789";
   let code;
   do {
     code = "";
-    for (let i = 0; i < 4; i++) code += alphabet[rnd(alphabet.length)];
+    for (let i = 0; i < 4; i++) code += digits[rnd(digits.length)];
   } while (rooms.has(code));
   return code;
 }
