@@ -49,6 +49,9 @@ function newRoom(code) {
     turnPos: 0,
     deadline: 0,
     sunkSeq: 0, sunkBy: "", sunkOwner: "",
+    epoch: 0,                 // bir oyuncunun kesintisiz sırası (ulti/solo tespiti için)
+    hitInfo: new Map(),       // key -> {by, epoch}
+    ultiPlayer: -1, ultiLeft: 0, ultiSeq: 0, ultiBy: "",
     timer: null,
   };
 }
@@ -139,6 +142,8 @@ function beginPlaying(room) {
   room.phase = "PLAYING";
   room.turnOrder = [...room.players.keys()].filter((id) => room.players.get(id).connected);
   room.turnPos = 0;
+  room.epoch = 1; room.hitInfo = new Map();
+  room.ultiPlayer = -1; room.ultiLeft = 0;
   room.log.push("Oyun başladı! Sıra: " + (room.players.get(currentTurnId(room))?.name || "-"));
   startTurnTimer(room);
   broadcast(room);
@@ -151,9 +156,14 @@ function fire(room, shooter, x, y) {
   if (room.shots.has(k)) return;
   const sp = room.players.get(shooter);
   if (!sp) return;
+
+  const wasUlti = (room.ultiPlayer === shooter && room.ultiLeft > 0);
+  let grantedUlti = false;
   const owner = room.occupancy.get(k);
+
   if (owner) {
     room.shots.set(k, { by: shooter, hit: true });
+    room.hitInfo.set(k, { by: shooter, epoch: room.epoch });
     sp.hits++;
     const [ownerId, shipIdx] = owner;
     const ownerP = room.players.get(ownerId);
@@ -166,6 +176,21 @@ function fire(room, shooter, x, y) {
         room.sunkSeq++; room.sunkBy = sp.name; room.sunkOwner = ownerP ? ownerP.name : "";
         if (ownerId === shooter) room.log.push(`${sp.name} kendi gemisini batırdı!`);
         else room.log.push(`${sp.name}, ${ownerP ? ownerP.name : "?"} oyuncusunun gemisini batırdı`);
+        // ULTI: düşman gemisinin TÜM parçaları bu oyuncu tarafından bu sırada vurulduysa
+        if (ownerId !== shooter) {
+          const solo = ship.cells.every((c) => {
+            const hi = room.hitInfo.get(key(c[0], c[1]));
+            return hi && hi.by === shooter && hi.epoch === room.epoch;
+          });
+          if (solo) {
+            room.ultiPlayer = shooter;
+            room.ultiLeft += 4;
+            room.ultiSeq++;
+            room.ultiBy = sp.name;
+            room.log.push(`⚡ ${sp.name} ULTI kazandı!`);
+            grantedUlti = true;
+          }
+        }
         if (ownerP && ownerP.alive && ownerP.ships.every((s) => shipSunk(s))) {
           ownerP.alive = false;
           room.turnOrder = room.turnOrder.filter((id) => id !== ownerId);
@@ -173,12 +198,27 @@ function fire(room, shooter, x, y) {
         }
       }
     }
-    if (checkOver(room)) { broadcast(room); return; }
+  } else {
+    room.shots.set(k, { by: shooter, hit: false });
+  }
+
+  if (checkOver(room)) { room.ultiPlayer = -1; room.ultiLeft = 0; broadcast(room); return; }
+
+  if (wasUlti) {
+    // Bu atış bir ulti bombasıydı; bir hak tüket
+    room.ultiLeft--;
+    if (room.ultiLeft <= 0) { room.ultiPlayer = -1; advanceTurn(room); }
+    else { startTurnTimer(room); }
+  } else if (grantedUlti) {
+    // Normal atışla ulti kazanıldı → ulti moduna gir, sıra aynı oyuncuda
+    startTurnTimer(room);
+  } else if (owner) {
+    // Normal isabet → aynı oyuncu devam
     const sidx = room.turnOrder.indexOf(shooter);
     room.turnPos = sidx >= 0 ? sidx : room.turnPos % Math.max(1, room.turnOrder.length);
     startTurnTimer(room);
   } else {
-    room.shots.set(k, { by: shooter, hit: false });
+    // Iska → sıra geçer
     advanceTurn(room);
   }
   broadcast(room);
@@ -186,6 +226,7 @@ function fire(room, shooter, x, y) {
 
 function advanceTurn(room) {
   if (room.turnOrder.length === 0) return;
+  room.epoch++;
   const cur = currentTurnId(room);
   const idx = room.turnOrder.indexOf(cur);
   room.turnPos = idx === -1 ? 0 : (idx + 1) % room.turnOrder.length;
@@ -247,6 +288,7 @@ function stateMsg(room) {
     winner: room.phase === "OVER" ? ([...room.players.values()].find((p) => p.alive)?.id ?? -1) : -1,
     players, shots, log: room.log.slice(-8),
     sunkSeq: room.sunkSeq, sunkBy: room.sunkBy, sunkOwner: room.sunkOwner,
+    ultiPlayer: room.ultiPlayer, ultiLeft: room.ultiLeft, ultiSeq: room.ultiSeq, ultiBy: room.ultiBy,
     code: room.code,
   };
   if (room.phase === "OVER") {
@@ -365,6 +407,8 @@ function onDisconnect(ws) {
     const wasTurn = currentTurnId(room) === pid;
     room.turnOrder = room.turnOrder.filter((id) => id !== pid);
     if (room.turnPos >= room.turnOrder.length) room.turnPos = 0;
+    if (room.ultiPlayer === pid) { room.ultiPlayer = -1; room.ultiLeft = 0; }
+    if (wasTurn) room.epoch++;
     if (!checkOver(room) && wasTurn) startTurnTimer(room);
   }
   // Oda boşaldıysa temizle
@@ -376,4 +420,9 @@ function onDisconnect(ws) {
   broadcast(room);
 }
 
-server.listen(PORT, () => console.log("Amiral Batti sunucusu port " + PORT));
+if (require.main === module) {
+  server.listen(PORT, () => console.log("Amiral Batti sunucusu port " + PORT));
+}
+
+// Test için (yalnızca require edildiğinde kullanılır)
+module.exports = { newRoom, fire, key, shipSunk, currentTurnId };
