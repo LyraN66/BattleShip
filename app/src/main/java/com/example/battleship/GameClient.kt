@@ -20,13 +20,18 @@ class GameClient(
     private var writer: BufferedWriter? = null
     @Volatile private var closed = false
 
-    fun connect(ip: String, port: Int) {
+    /** [hello] verilirse, bağlantı kurulur kurulmaz (okuma döngüsünden önce) gönderilir. */
+    fun connect(ip: String, port: Int, hello: JSONObject? = null) {
         Thread {
             try {
                 val s = Socket()
                 s.connect(InetSocketAddress(ip, port), 8000)
                 socket = s
-                writer = BufferedWriter(OutputStreamWriter(s.getOutputStream(), Charsets.UTF_8))
+                val w = BufferedWriter(OutputStreamWriter(s.getOutputStream(), Charsets.UTF_8))
+                writer = w
+                if (hello != null) {
+                    synchronized(w) { w.write(hello.toString()); w.write("\n"); w.flush() }
+                }
                 val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
                 while (true) {
                     val line = reader.readLine() ?: break

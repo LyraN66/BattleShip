@@ -30,8 +30,7 @@ class Bot(private val name: String, private val ip: String, private val port: In
     )
 
     fun start() {
-        client.connect(ip, port)
-        client.send(JSONObject().put("t", "join").put("name", name))
+        client.connect(ip, port, JSONObject().put("t", "join").put("name", name))
     }
 
     fun stop() { client.close() }

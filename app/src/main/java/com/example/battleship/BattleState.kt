@@ -89,9 +89,8 @@ class BattleState {
             },
         )
         client = c
-        c.connect(ip, port)
-        // bağlanınca join gönder
-        c.send(JSONObject().put("t", "join").put("name", name))
+        // join mesajı bağlantı kurulur kurulmaz gönderilir (yarış durumunu önler)
+        c.connect(ip, port, JSONObject().put("t", "join").put("name", name))
         connected = true
         connecting = false
     }
