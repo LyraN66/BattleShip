@@ -1,0 +1,15 @@
+{
+  "name": "amiral-batti-server",
+  "version": "1.0.0",
+  "description": "Amiral Battı internet (WebSocket) oyun sunucusu",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}

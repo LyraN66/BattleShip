@@ -1,5 +1,6 @@
 package com.example.battleship
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -110,6 +112,7 @@ private fun BackBar(label: String, onBack: () -> Unit) {
 private fun HomeScreen(s: BattleState) {
     var name by remember { mutableStateOf("") }
     var joining by remember { mutableStateOf(false) }
+    var inet by remember { mutableStateOf(false) }
     var manual by remember { mutableStateOf("") }
 
     val scan = rememberLauncherForActivityResult(ScanContract()) { r ->
@@ -134,29 +137,37 @@ private fun HomeScreen(s: BattleState) {
 
         s.error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
-        if (!joining) {
+        if (inet) {
+            val ctx = LocalContext.current
+            val prefs = remember { ctx.getSharedPreferences("bs", Context.MODE_PRIVATE) }
+            var url by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
+            var code by remember { mutableStateOf("") }
+            Text("🌐 İnternetten oyna (aynı ağ gerekmez)", color = Color(0xFF9FB3C8))
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it.trim(); prefs.edit().putString("server_url", it.trim()).apply() },
+                label = { Text("Sunucu adresi") },
+                placeholder = { Text("örn. amiral-batti.onrender.com") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
             Button(
-                onClick = { if (name.isNotBlank()) s.host(name) },
-                enabled = name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("Oda Kur (Host)") }
-            OutlinedButton(
-                onClick = { if (name.isNotBlank()) joining = true },
-                enabled = name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("Odaya Katıl") }
-
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            Text("🤖 Bilgisayara karşı (tek başına dene)", color = Color(0xFF9FB3C8))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 2, 3).forEach { n ->
-                    OutlinedButton(
-                        onClick = { s.hostVsBots(name.ifBlank { "Sen" }, n) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("$n bot") }
-                }
-            }
-        } else {
+                onClick = { if (name.isNotBlank() && url.isNotBlank()) s.createRoom(name, url) },
+                enabled = name.isNotBlank() && url.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+            ) { Text("Oda Kur (kod üret)") }
+            Text("veya bir odaya katıl", color = Color(0xFF9FB3C8))
+            OutlinedTextField(
+                value = code, onValueChange = { code = it.uppercase().take(4) },
+                label = { Text("Oda kodu") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = { if (name.isNotBlank() && url.isNotBlank() && code.isNotBlank()) s.joinRoom(name, url, code) },
+                enabled = name.isNotBlank() && url.isNotBlank() && code.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Koda Katıl") }
+            TextButton(onClick = { inet = false }) { Text("← Geri") }
+        } else if (joining) {
             Button(
                 onClick = {
                     scan.launch(
@@ -178,7 +189,34 @@ private fun HomeScreen(s: BattleState) {
                 enabled = manual.contains(":"),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Bağlan") }
-            TextButton(onClick = { joining = false }) { Text("Geri") }
+            TextButton(onClick = { joining = false }) { Text("← Geri") }
+        } else {
+            Button(
+                onClick = { if (name.isNotBlank()) s.host(name) },
+                enabled = name.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text("Oda Kur (Aynı ağ)") }
+            OutlinedButton(
+                onClick = { if (name.isNotBlank()) joining = true },
+                enabled = name.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text("Odaya Katıl (Aynı ağ)") }
+            Button(
+                onClick = { if (name.isNotBlank()) inet = true },
+                enabled = name.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text("🌐 İnternetten Oyna") }
+
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            Text("🤖 Bilgisayara karşı (tek başına dene)", color = Color(0xFF9FB3C8))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 2, 3).forEach { n ->
+                    OutlinedButton(
+                        onClick = { s.hostVsBots(name.ifBlank { "Sen" }, n) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("$n bot") }
+                }
+            }
         }
     }
 }
@@ -204,7 +242,26 @@ private fun LobbyScreen(s: BattleState) {
         BackBar("Menü") { s.leave() }
         Text("Lobi", style = MaterialTheme.typography.headlineSmall, color = Color.White)
 
-        if (s.isHost && s.vsBots) {
+        if (s.online) {
+            val code = s.roomCode
+            if (code != null) {
+                val clipboard = LocalClipboardManager.current
+                var copied by remember { mutableStateOf(false) }
+                Text("Oda Kodu", color = Color(0xFF9FB3C8))
+                Text(code, style = MaterialTheme.typography.displayMedium, color = Color.White,
+                    fontFamily = FontFamily.Monospace)
+                FilledTonalButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) {
+                    Text(if (copied) "✓ Kopyalandı" else "Kodu kopyala")
+                }
+                Text(
+                    if (s.isHost) "Arkadaşların bu kodla 'Koda Katıl' yapsın"
+                    else "Host'un başlatması bekleniyor…",
+                    color = Color(0xFF9FB3C8), style = MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                Text("Sunucuya bağlanılıyor…", color = Color(0xFF9FB3C8))
+            }
+        } else if (s.isHost && s.vsBots) {
             Text("Bilgisayara karşı mod", color = Color(0xFF9FB3C8))
             Text("Botlar katıldı, Başlat'a bas", color = Color(0xFF9FB3C8),
                 style = MaterialTheme.typography.bodySmall)

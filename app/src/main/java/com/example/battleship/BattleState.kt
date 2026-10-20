@@ -19,9 +19,12 @@ data class ShotUi(val x: Int, val y: Int, val hit: Boolean, val by: Int)
 class BattleState {
     private var server: GameServer? = null
     private var client: GameClient? = null
+    private var ws: WsClient? = null
     private val bots = mutableListOf<Bot>()
     private var serverPort = -1
     var vsBots by mutableStateOf(false)
+    var online by mutableStateOf(false)
+    var roomCode by mutableStateOf<String?>(null)
 
     var connected by mutableStateOf(false)     // istemci bağlı mı
     var connecting by mutableStateOf(false)
@@ -71,6 +74,43 @@ class BattleState {
         connectClient("127.0.0.1", port, name)
     }
 
+    // ---- İnternet modu ----
+    fun createRoom(name: String, serverUrl: String) {
+        val url = normalizeWs(serverUrl) ?: run { reset(); error = "Sunucu adresi geçersiz."; return }
+        reset(); online = true; connecting = true
+        val c = WsClient(onMessage = { onMsg(it) }, onClosed = { r -> onWsClosed(r) })
+        ws = c
+        c.connect(url, JSONObject().put("t", "create").put("name", name.ifBlank { "Oyuncu" }))
+        connected = true; connecting = false
+    }
+
+    fun joinRoom(name: String, serverUrl: String, code: String) {
+        val url = normalizeWs(serverUrl) ?: run { reset(); error = "Sunucu adresi geçersiz."; return }
+        reset(); online = true; connecting = true
+        val c = WsClient(onMessage = { onMsg(it) }, onClosed = { r -> onWsClosed(r) })
+        ws = c
+        c.connect(url, JSONObject().put("t", "join").put("code", code.uppercase().trim()).put("name", name.ifBlank { "Oyuncu" }))
+        connected = true; connecting = false
+    }
+
+    private fun onWsClosed(reason: String?) {
+        connecting = false
+        if (phase != "OVER") error = reason ?: "Bağlantı kesildi"
+        connected = false
+    }
+
+    private fun normalizeWs(s: String): String? {
+        var u = s.trim()
+        if (u.isEmpty()) return null
+        u = u.removeSuffix("/")
+        return when {
+            u.startsWith("ws://") || u.startsWith("wss://") -> u
+            u.startsWith("http://") -> "ws://" + u.removePrefix("http://")
+            u.startsWith("https://") -> "wss://" + u.removePrefix("https://")
+            else -> "wss://$u"
+        }
+    }
+
     /** Bilgisayara karşı: yerel sunucu + botlar. */
     fun hostVsBots(name: String, botCount: Int) {
         host(name)
@@ -107,6 +147,9 @@ class BattleState {
 
     private fun onMsg(m: JSONObject) {
         when (m.optString("t")) {
+            "created" -> {
+                roomCode = m.optString("code"); myId = m.optInt("id"); isHost = m.optBoolean("host", true)
+            }
             "welcome" -> {
                 myId = m.optInt("id"); isHost = m.optBoolean("host")
             }
@@ -134,6 +177,7 @@ class BattleState {
                 turn = m.optInt("turn", -1)
                 deadline = m.optLong("deadline", 0L)
                 winner = m.optInt("winner", -1)
+                m.optString("code").takeIf { it.isNotBlank() }?.let { roomCode = it }
                 val pj = m.optJSONArray("players")
                 val pl = ArrayList<PlayerUi>()
                 if (pj != null) for (i in 0 until pj.length()) {
@@ -189,13 +233,15 @@ class BattleState {
         }
     }
 
+    private fun out(o: JSONObject) { ws?.send(o) ?: client?.send(o) }
+
     fun setConfig(newShips: Int, newTurn: Int) {
-        client?.send(JSONObject().put("t", "config").put("ships", newShips).put("turnSec", newTurn))
+        out(JSONObject().put("t", "config").put("ships", newShips).put("turnSec", newTurn))
     }
 
-    fun startGame() { client?.send(JSONObject().put("t", "start")) }
-    fun confirmReady() { client?.send(JSONObject().put("t", "ready")) }
-    fun fire(x: Int, y: Int) { client?.send(JSONObject().put("t", "fire").put("x", x).put("y", y)) }
+    fun startGame() { out(JSONObject().put("t", "start")) }
+    fun confirmReady() { out(JSONObject().put("t", "ready")) }
+    fun fire(x: Int, y: Int) { out(JSONObject().put("t", "fire").put("x", x).put("y", y)) }
 
     fun leave() { reset() }
 
@@ -203,8 +249,10 @@ class BattleState {
         bots.forEach { try { it.stop() } catch (e: Exception) {} }
         bots.clear()
         try { client?.close() } catch (e: Exception) {}
+        try { ws?.close() } catch (e: Exception) {}
         try { server?.stop() } catch (e: Exception) {}
-        client = null; server = null; serverPort = -1; vsBots = false
+        client = null; ws = null; server = null; serverPort = -1; vsBots = false
+        online = false; roomCode = null
         connected = false; connecting = false; error = null
         myId = -1; isHost = false; hostAddress = null
         phase = ""; myShips = emptyList(); players = emptyList(); shots = emptyList()
