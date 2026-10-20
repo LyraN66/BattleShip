@@ -302,12 +302,12 @@ function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;
 
 // --- Radyo (https yayınlar; ses telefon tuşlarından) ---
 const STATIONS=[
-  {n:"Radio Paradise", u:"https://stream.radioparadise.com/mp3-128"},
-  {n:"RP Chill", u:"https://stream.radioparadise.com/mellow-128"},
-  {n:"RP Rock", u:"https://stream.radioparadise.com/rock-128"},
-  {n:"Groove Salad", u:"https://ice1.somafm.com/groovesalad-128-mp3"},
-  {n:"Lo-Fi Beats", u:"https://ice1.somafm.com/fluid-128-mp3"},
-  {n:"Drone Zone", u:"https://ice1.somafm.com/dronezone-128-mp3"},
+  {n:"PowerTürk", u:"https://listen.powerapp.com.tr/powerturk/mpeg/icecast.audio"},
+  {n:"Power Pop", u:"https://listen.powerapp.com.tr/powerpop/mpeg/icecast.audio"},
+  {n:"Power FM", u:"https://listen.powerapp.com.tr/powerfm/mpeg/icecast.audio"},
+  {n:"PowerTürk Slow", u:"https://listen.powerapp.com.tr/powerturkslow/mpeg/icecast.audio"},
+  {n:"Power Love", u:"https://listen.powerapp.com.tr/powerlove/mpeg/icecast.audio"},
+  {n:"Power Dance", u:"https://listen.powerapp.com.tr/powerdance/mpeg/icecast.audio"},
 ];
 const radio=new Audio(); radio.preload='none';
 let curStation=-1, radioPlaying=false;
