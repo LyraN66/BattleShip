@@ -146,7 +146,9 @@
     <div style="text-align:center;color:var(--muted);margin:6px 0">Gemiler neredeydi</div>
     <div id="overBoard"></div>
     <div id="overLegend" class="players" style="justify-content:center;margin-top:8px"></div>
-    <button onclick="leave()">Ana menüye dön</button>
+    <button id="btnRematch" class="hidden" onclick="send({t:'rematch'})">🔄 Tekrar oyna (aynı oda)</button>
+    <div id="rematchHint" class="sub hidden">Tekrar oynamak için host "Tekrar oyna"ya bassın</div>
+    <button class="sec" onclick="leave()">Ana menüye dön</button>
   </div>
   <div class="radio card">
     <div class="rtop">
@@ -245,6 +247,7 @@ function onMsg(m){
     if(phase==='OVER' && prevPhase!=='OVER'){ confettiBurst(); vibrate([0,80,60,120]); }
     prevPhase=phase;
     if(phase!=='PLACING'){ readySent=false; }
+    if(phase==='LOBBY'){ lastSunkSeq=0; lastUltiSeq=0; prevShotKeys=new Set(); reveal=null; myShips=[]; ultiPlayer=-1; ultiLeft=0; }
   }
   render();
 }
@@ -346,6 +349,8 @@ function render(){
       <span style="color:var(--muted)">${p.sunk} batırma · ${p.hits} isabet</span></div>`).join('');
     drawBoard($('overBoard'), false);
     $('overLegend').innerHTML = players.map(p=>`<span class="pchip"><span class="dot" style="background:${colorOf(p.color)}"></span>${esc(p.name)}</span>`).join('');
+    show('btnRematch', isHost);
+    show('rematchHint', !isHost);
   }
 }
 

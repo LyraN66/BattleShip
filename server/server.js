@@ -142,6 +142,21 @@ function startGame(room) {
   broadcast(room);
 }
 
+function resetForRematch(room) {
+  for (const p of room.players.values()) {
+    p.alive = true; p.ready = false; p.ships = []; p.hits = 0; p.sunkCount = 0;
+  }
+  room.phase = "LOBBY";
+  room.shots = new Map(); room.occupancy = new Map(); room.hitInfo = new Map();
+  room.turnOrder = []; room.turnPos = 0; room.deadline = 0;
+  room.sunkSeq = 0; room.sunkBy = ""; room.sunkOwner = "";
+  room.ultiPlayer = -1; room.ultiLeft = 0; room.ultiSeq = 0; room.ultiBy = "";
+  room.epoch = 0;
+  if (room.timer) { clearTimeout(room.timer); room.timer = null; }
+  room.log = ["Yeni oyun! Host başlatınca başlar"];
+  broadcast(room);
+}
+
 function beginPlaying(room) {
   room.phase = "PLAYING";
   room.turnOrder = [...room.players.keys()].filter((id) => room.players.get(id).connected);
@@ -408,6 +423,9 @@ function handle(ws, m) {
         if (room.phase !== "PLAYING") return;
         if (currentTurnId(room) !== pid) return;
         fire(room, pid, m.x | 0, m.y | 0);
+      } else if (m.t === "rematch") {
+        if (pid !== room.hostId || room.phase !== "OVER") return;
+        resetForRematch(room);
       }
     }
   }
