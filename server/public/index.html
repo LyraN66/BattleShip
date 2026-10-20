@@ -76,6 +76,10 @@
   .ultibar{background:linear-gradient(90deg,#b8860b,#ffcc33);color:#1a1200;font-weight:800;border-radius:12px;padding:12px 16px;margin:8px 0;text-align:center;animation:ultipulse 1s ease-in-out infinite}
   @keyframes ultipulse{0%,100%{box-shadow:0 0 0 0 rgba(255,204,51,0)}50%{box-shadow:0 0 0 6px rgba(255,204,51,.5)}}
   .flash.anim{animation:flashin .45s cubic-bezier(.2,1.4,.4,1)}
+  .placeConfirm{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:70;width:min(86vw,360px);text-align:center;pointer-events:none}
+  .placeConfirm button{pointer-events:auto;width:100%;font-size:21px;padding:20px;box-shadow:0 10px 34px rgba(0,0,0,.55);animation:bpulse 1.2s ease-in-out infinite}
+  .placeConfirm .hint{display:inline-block;margin-top:10px;color:#e3ecf7;background:rgba(7,25,40,.8);padding:5px 12px;border-radius:9px;font-size:13px}
+  @keyframes bpulse{0%,100%{box-shadow:0 10px 34px rgba(0,0,0,.55),0 0 0 0 rgba(124,77,255,0)}50%{box-shadow:0 10px 34px rgba(0,0,0,.55),0 0 0 9px rgba(124,77,255,.45)}}
   @keyframes flashin{0%{transform:translateX(-50%) scale(.5) rotate(-4deg);opacity:0}70%{transform:translateX(-50%) scale(1.12) rotate(2deg)}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
@@ -117,9 +121,7 @@
   <!-- GAME -->
   <div id="game" class="hidden">
     <div id="placingBox" class="card hidden">
-      <div style="font-weight:600">Gemilerin yerleştirildi</div>
-      <div class="sub">Haritada kendi gemilerini gör, onayla</div>
-      <button id="btnReady">Onayla ve Hazırım</button>
+      <div id="placingText" style="font-weight:600;text-align:center">Gemilerin yerleştirildi — aşağıda gör</div>
     </div>
     <div id="ultiBar" class="ultibar hidden"></div>
     <div id="turnBanner" class="banner hidden">
@@ -167,6 +169,11 @@
 </div>
 
 <div id="flash" class="flash hidden"></div>
+
+<div id="placeConfirm" class="placeConfirm hidden">
+  <button id="btnReady">✅ Onayla ve Hazırım</button>
+  <div class="hint">Haritanda gemilerini gör, sonra onayla</div>
+</div>
 
 <script>
 const COLORS=["#E53935","#1E88E5","#43A047","#FDD835","#8E24AA","#FB8C00","#00ACC1","#D81B60"];
@@ -297,6 +304,7 @@ function render(){
   show('lobby', inRoom && (phase===''||phase==='LOBBY'));
   show('game', inRoom && (phase==='PLACING'||phase==='PLAYING'));
   show('over', inRoom && phase==='OVER');
+  show('placeConfirm', false);   // PLACING dalında tekrar açılır
 
   if(phase===''||phase==='LOBBY'){
     $('lobbyCode').textContent = roomCode||'…';
@@ -313,12 +321,14 @@ function render(){
     if(phase==='PLACING'){
       const me=players.find(p=>p.id===myId);
       const readyCount=players.filter(p=>p.ready).length;
-      const btn=$('btnReady');
+      const isReady = readySent || (me && me.ready);
       // Kendini onayladıysan ama sunucu seni hazır görmüyorsa onayı tekrar gönder (kilitlenmeyi önler)
       if(readySent && me && !me.ready){ send({t:'ready'}); }
-      if(readySent || (me && me.ready)){ btn.disabled=true; btn.textContent='Onaylandı — bekleniyor ('+readyCount+'/'+players.length+')'; }
-      else { btn.disabled=false; btn.textContent='Onayla ve Hazırım'; }
-    }
+      show('placeConfirm', !isReady);
+      $('placingText').textContent = isReady
+        ? ('✅ Onaylandı — bekleniyor ('+readyCount+'/'+players.length+')')
+        : 'Gemilerin yerleştirildi — aşağıda gör, sonra onayla';
+    } else { show('placeConfirm', false); }
     const ultiActive = phase==='PLAYING' && ultiPlayer>=0;
     const ub=$('ultiBar');
     if(ultiActive){
