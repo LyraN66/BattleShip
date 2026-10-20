@@ -113,6 +113,17 @@ private fun HomeScreen(s: BattleState) {
                 enabled = name.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text("Odaya Katıl") }
+
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            Text("🤖 Bilgisayara karşı (tek başına dene)", color = Color(0xFF9FB3C8))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 2, 3).forEach { n ->
+                    OutlinedButton(
+                        onClick = { s.hostVsBots(name.ifBlank { "Sen" }, n) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("$n bot") }
+                }
+            }
         } else {
             Button(
                 onClick = {
@@ -160,7 +171,11 @@ private fun LobbyScreen(s: BattleState) {
     ) {
         Text("Lobi", style = MaterialTheme.typography.headlineSmall, color = Color.White)
 
-        if (s.isHost) {
+        if (s.isHost && s.vsBots) {
+            Text("Bilgisayara karşı mod", color = Color(0xFF9FB3C8))
+            Text("Botlar katıldı, Başlat'a bas", color = Color(0xFF9FB3C8),
+                style = MaterialTheme.typography.bodySmall)
+        } else if (s.isHost) {
             val addr = s.hostAddress
             if (addr != null) {
                 QrImage(addr)

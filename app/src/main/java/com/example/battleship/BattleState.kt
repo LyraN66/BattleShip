@@ -17,6 +17,9 @@ data class ShotUi(val x: Int, val y: Int, val hit: Boolean, val by: Int)
 class BattleState {
     private var server: GameServer? = null
     private var client: GameClient? = null
+    private val bots = mutableListOf<Bot>()
+    private var serverPort = -1
+    var vsBots by mutableStateOf(false)
 
     var connected by mutableStateOf(false)     // istemci bağlı mı
     var connecting by mutableStateOf(false)
@@ -52,9 +55,22 @@ class BattleState {
         val port = srv.start()
         if (port < 0) { error = "Sunucu başlatılamadı."; connecting = false; return }
         server = srv
+        serverPort = port
         val ip = NetUtil.localIpv4()
         hostAddress = if (ip != null) "$ip:$port" else null
         connectClient("127.0.0.1", port, name)
+    }
+
+    /** Bilgisayara karşı: yerel sunucu + botlar. */
+    fun hostVsBots(name: String, botCount: Int) {
+        host(name)
+        if (serverPort < 0) return
+        vsBots = true
+        for (i in 1..botCount) {
+            val b = Bot("Bot $i", "127.0.0.1", serverPort)
+            b.start()
+            bots.add(b)
+        }
     }
 
     fun join(name: String, ip: String, port: Int) {
@@ -149,9 +165,11 @@ class BattleState {
     fun leave() { reset() }
 
     fun reset() {
+        bots.forEach { try { it.stop() } catch (e: Exception) {} }
+        bots.clear()
         try { client?.close() } catch (e: Exception) {}
         try { server?.stop() } catch (e: Exception) {}
-        client = null; server = null
+        client = null; server = null; serverPort = -1; vsBots = false
         connected = false; connecting = false; error = null
         myId = -1; isHost = false; hostAddress = null
         phase = ""; myShips = emptyList(); players = emptyList(); shots = emptyList()
