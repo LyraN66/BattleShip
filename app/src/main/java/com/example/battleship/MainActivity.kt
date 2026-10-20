@@ -2,6 +2,7 @@ package com.example.battleship
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -25,6 +26,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,11 +68,21 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(s: BattleState) {
+    // Sistem geri tuşu: odadayken menüye dön (uygulamadan çıkma)
+    BackHandler(enabled = s.connected || s.connecting) { s.leave() }
     when {
         !s.connected && !s.connecting -> HomeScreen(s)
         s.phase == "LOBBY" || s.phase == "" -> LobbyScreen(s)
         s.phase == "OVER" -> OverScreen(s)
         else -> GameScreen(s) // PLACING / PLAYING
+    }
+}
+
+@Composable
+private fun BackBar(label: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onBack) { Text("← $label") }
+        Spacer(Modifier.weight(1f))
     }
 }
 
@@ -169,6 +182,7 @@ private fun LobbyScreen(s: BattleState) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        BackBar("Menü") { s.leave() }
         Text("Lobi", style = MaterialTheme.typography.headlineSmall, color = Color.White)
 
         if (s.isHost && s.vsBots) {
@@ -179,7 +193,15 @@ private fun LobbyScreen(s: BattleState) {
             val addr = s.hostAddress
             if (addr != null) {
                 QrImage(addr)
-                Text(addr, color = Color.White, fontFamily = FontFamily.Monospace)
+                val clipboard = LocalClipboardManager.current
+                var copied by remember { mutableStateOf(false) }
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(addr, color = Color.White, fontFamily = FontFamily.Monospace)
+                    FilledTonalButton(onClick = {
+                        clipboard.setText(AnnotatedString(addr)); copied = true
+                    }) { Text(if (copied) "✓ Kopyalandı" else "Kopyala") }
+                }
                 Text("Diğerleri bu QR'ı okutup katılsın", color = Color(0xFF9FB3C8),
                     style = MaterialTheme.typography.bodySmall)
             } else {
@@ -262,6 +284,7 @@ private fun GameScreen(s: BattleState) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        BackBar("Çık") { s.leave() }
         // Üst bilgi
         if (placing) {
             Text("Gemilerin yerleştirildi", style = MaterialTheme.typography.titleMedium, color = Color.White)
@@ -335,14 +358,14 @@ private fun Board(s: BattleState, enabled: Boolean, onFire: (Int, Int) -> Unit) 
     val w = s.w; val h = s.h
     val myCells = remember(s.myShips) { s.myShips.flatten().toHashSet() }
     val shotMap = remember(s.shots) { s.shots.associateBy { it.x to it.y } }
+    val colorById = remember(s.players) { s.players.associate { it.id to colorOf(it.color) } }
 
     val water = Color(0xFF0B3C5D)
     val waterAlt = Color(0xFF0E456B)
     val gridLine = Color(0x33FFFFFF)
     val myShip = Color(0xFFB0BEC5)
     val myShipHit = Color(0xFF7F1D1D)
-    val enemyHit = Color(0xFFFF5252)
-    val missDot = Color(0xFFBFD3E6)
+    val enemyHitBg = Color(0xFF241A1A)
 
     Canvas(
         Modifier
@@ -371,20 +394,19 @@ private fun Board(s: BattleState, enabled: Boolean, onFire: (Int, Int) -> Unit) 
                 drawRect(base, Offset(left, top), Size(cell, cell))
                 when {
                     shot != null && shot.hit && mine -> drawRect(myShipHit, Offset(left, top), Size(cell, cell))
-                    shot != null && shot.hit -> {
-                        drawRect(enemyHit, Offset(left, top), Size(cell, cell))
-                    }
+                    shot != null && shot.hit -> drawRect(enemyHitBg, Offset(left, top), Size(cell, cell))
                     mine -> drawRect(myShip, Offset(left + cell * 0.12f, top + cell * 0.12f), Size(cell * 0.76f, cell * 0.76f))
                 }
                 if (shot != null) {
+                    // İşaret, vuran oyuncunun renginde
+                    val sc = colorById[shot.by] ?: Color.White
                     if (shot.hit) {
-                        // çarpı
-                        drawLine(Color.White, Offset(left + cell * 0.25f, top + cell * 0.25f),
-                            Offset(left + cell * 0.75f, top + cell * 0.75f), cell * 0.08f)
-                        drawLine(Color.White, Offset(left + cell * 0.75f, top + cell * 0.25f),
-                            Offset(left + cell * 0.25f, top + cell * 0.75f), cell * 0.08f)
+                        drawLine(sc, Offset(left + cell * 0.22f, top + cell * 0.22f),
+                            Offset(left + cell * 0.78f, top + cell * 0.78f), cell * 0.14f)
+                        drawLine(sc, Offset(left + cell * 0.78f, top + cell * 0.22f),
+                            Offset(left + cell * 0.22f, top + cell * 0.78f), cell * 0.14f)
                     } else {
-                        drawCircle(missDot, cell * 0.12f, Offset(left + cell / 2, top + cell / 2))
+                        drawCircle(sc, cell * 0.14f, Offset(left + cell / 2, top + cell / 2))
                     }
                 }
                 drawRect(gridLine, Offset(left, top), Size(cell, cell), style = Stroke(1f))
