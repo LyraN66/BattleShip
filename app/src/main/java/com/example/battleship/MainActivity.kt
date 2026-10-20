@@ -291,14 +291,38 @@ private fun GameScreen(s: BattleState) {
             Text("Haritada kendi gemilerini gör, onayla", color = Color(0xFF9FB3C8),
                 style = MaterialTheme.typography.bodySmall)
         } else {
-            val turnName = s.players.firstOrNull { it.id == s.turn }?.name ?: "-"
+            val cur = s.players.firstOrNull { it.id == s.turn }
             val mine = s.myTurn
-            Text(
-                if (mine) "Sıra sende! Bir kareye ateş et" else "Sıra: $turnName",
-                style = MaterialTheme.typography.titleMedium,
-                color = if (mine) colorOf(s.players.firstOrNull { it.id == s.myId }?.color ?: 0) else Color.White,
-            )
-            if (remain >= 0) Text("⏱ $remain sn", color = Color(0xFF9FB3C8))
+            val col = cur?.let { colorOf(it.color) } ?: Color.Gray
+            Card(
+                colors = CardDefaults.cardColors(containerColor = if (mine) col else col.copy(alpha = 0.22f)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(col))
+                        Text(
+                            if (mine) "🎯 SIRA SENDE" else "Sıra: ${cur?.name ?: "-"}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color.White,
+                        )
+                    }
+                    if (remain >= 0) {
+                        Text(
+                            "$remain",
+                            fontSize = 34.sp,
+                            color = if (remain <= 5) Color(0xFFFF5252) else Color.White,
+                        )
+                    }
+                }
+            }
+            if (mine) Text("Bir kareye dokunup ateş et", color = Color(0xFF9FB3C8),
+                style = MaterialTheme.typography.bodySmall)
         }
 
         Board(s, enabled = s.myTurn && !placing) { x, y -> s.fire(x, y) }
