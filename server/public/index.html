@@ -221,7 +221,7 @@ $('btnCreate').onclick=()=>{ const n=$('name').value.trim(); if(!n)return showEr
 $('btnJoin').onclick=()=>{ const n=$('name').value.trim(); const c=$('joinCode').value.trim(); if(!n)return showErr('Önce adını yaz'); if(c.length<4)return showErr('4 haneli kodu gir'); connect({t:'join',code:c,name:n}); };
 $('btnCopy').onclick=()=>{ if(roomCode) navigator.clipboard&&navigator.clipboard.writeText(roomCode); $('btnCopy').textContent='✓ Kopyalandı'; };
 $('btnStart').onclick=()=>send({t:'start'});
-$('btnReady').onclick=()=>{ send({t:'ready'}); $('btnReady').disabled=true; $('btnReady').textContent='Onaylandı, bekleniyor…'; };
+$('btnReady').onclick=()=>{ readySent=true; send({t:'ready'}); render(); };
 $('shipsSlider').oninput=()=>{ $('shipsVal').textContent=$('shipsSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 $('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 
@@ -310,6 +310,15 @@ function render(){
   if(phase==='PLACING'||phase==='PLAYING'){
     show('placingBox', phase==='PLACING');
     show('turnBanner', phase==='PLAYING');
+    if(phase==='PLACING'){
+      const me=players.find(p=>p.id===myId);
+      const readyCount=players.filter(p=>p.ready).length;
+      const btn=$('btnReady');
+      // Kendini onayladıysan ama sunucu seni hazır görmüyorsa onayı tekrar gönder (kilitlenmeyi önler)
+      if(readySent && me && !me.ready){ send({t:'ready'}); }
+      if(readySent || (me && me.ready)){ btn.disabled=true; btn.textContent='Onaylandı — bekleniyor ('+readyCount+'/'+players.length+')'; }
+      else { btn.disabled=false; btn.textContent='Onayla ve Hazırım'; }
+    }
     const ultiActive = phase==='PLAYING' && ultiPlayer>=0;
     const ub=$('ultiBar');
     if(ultiActive){
