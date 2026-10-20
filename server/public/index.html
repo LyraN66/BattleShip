@@ -58,6 +58,19 @@
   .rchip{width:auto;margin:0;padding:8px 12px;background:#0a2238;border:1px solid var(--line);font-size:13px;font-weight:500}
   .rchip.on{background:var(--btn);border-color:var(--btn)}
   .rmsg{color:#ff9b9b;font-size:12px;margin-top:6px}
+  /* --- efektler --- */
+  .cell[data-fire]{cursor:pointer}
+  .cell[data-fire]:active{transform:scale(.88)}
+  .cell.fxhit{animation:fxhit .55s ease-out}
+  .cell.fxmiss{animation:fxmiss .5s ease-out}
+  @keyframes fxhit{0%{transform:scale(1.5);filter:brightness(2.4);box-shadow:0 0 16px 7px rgba(255,120,40,.95)}100%{transform:scale(1);filter:none;box-shadow:none}}
+  @keyframes fxmiss{0%{transform:scale(1.35);box-shadow:0 0 12px 5px rgba(150,200,255,.75)}100%{transform:scale(1);box-shadow:none}}
+  .shake{animation:shake .4s ease-in-out}
+  @keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-7px)}30%{transform:translateX(7px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+  #board.glow{animation:glow 1.3s ease-in-out infinite}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 4px var(--glow,#7C4DFF)}}
+  .flash.anim{animation:flashin .45s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes flashin{0%{transform:translateX(-50%) scale(.5) rotate(-4deg);opacity:0}70%{transform:translateX(-50%) scale(1.12) rotate(2deg)}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
 </style>
 </head>
 <body>
@@ -154,6 +167,7 @@ const show=(id,on)=>$(id).classList.toggle('hidden',!on);
 let ws=null, st={}, myId=-1, isHost=false, phase="", roomCode=null;
 let myShips=[], players=[], shots=[], w=10, h=10, turn=-1, deadline=0, log=[], reveal=null, winner=-1;
 let lastSunkSeq=0, readySent=false, timerIv=null;
+let prevShotKeys=new Set(), pendingFx=[], prevPhase="";
 
 $('name').value = localStorage.getItem('name')||"";
 $('name').oninput = ()=>localStorage.setItem('name',$('name').value);
@@ -179,7 +193,7 @@ $('btnReady').onclick=()=>{ send({t:'ready'}); $('btnReady').disabled=true; $('b
 $('shipsSlider').oninput=()=>{ $('shipsVal').textContent=$('shipsSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 $('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
 
-function leave(){ try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
+function leave(){ try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
 
 function onMsg(m){
   if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; }
@@ -190,7 +204,14 @@ function onMsg(m){
     phase=m.phase; w=m.w; h=m.h; turn=m.turn; deadline=m.deadline; winner=m.winner;
     players=m.players||[]; shots=m.shots||[]; log=m.log||[]; if(m.code) roomCode=m.code;
     reveal=m.reveal||reveal;
-    if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); }
+    // efektler: yeni atışları bul
+    const newFx=[]; (shots||[]).forEach(s=>{ if(!prevShotKeys.has(s.x+','+s.y)) newFx.push(s); });
+    prevShotKeys=new Set((shots||[]).map(s=>s.x+','+s.y));
+    pendingFx=newFx;
+    if(newFx.some(s=>s.hit)){ screenShake(); vibrate([0,55]); }
+    if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]); }
+    if(phase==='OVER' && prevPhase!=='OVER'){ confettiBurst(); vibrate([0,80,60,120]); }
+    prevPhase=phase;
     if(phase!=='PLACING'){ readySent=false; }
   }
   render();
@@ -201,7 +222,26 @@ function doFlash(by,owner){
   const sub = (by===owner||!owner) ? (by+' bir gemi batırdı') : (by+", "+owner+"'ın gemisini batırdı");
   f.innerHTML='<b>💥 İçinden geçti!</b><br><span style="color:#ffd7d7">'+sub+'</span>';
   f.classList.remove('hidden');
+  f.classList.remove('anim'); void f.offsetWidth; f.classList.add('anim');
   clearTimeout(f._t); f._t=setTimeout(()=>f.classList.add('hidden'),2000);
+}
+
+function vibrate(p){ try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} }
+function screenShake(){ const w=document.querySelector('.wrap'); if(!w)return; w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake'); setTimeout(()=>w.classList.remove('shake'),430); }
+function applyFx(){ if(!pendingFx.length) return; const b=$('board'); if(b) pendingFx.forEach(s=>{ const el=b.querySelector('[data-x="'+s.x+'"][data-y="'+s.y+'"]'); if(el) el.classList.add(s.hit?'fxhit':'fxmiss'); }); pendingFx=[]; }
+function confettiBurst(){
+  const c=document.createElement('canvas');
+  c.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:60';
+  document.body.appendChild(c);
+  const ctx=c.getContext('2d'); const W=c.width=innerWidth, H=c.height=innerHeight;
+  const P=[];
+  for(let i=0;i<130;i++) P.push({x:Math.random()*W,y:-20-Math.random()*H*0.4,vx:(Math.random()-.5)*3,vy:2+Math.random()*3.5,s:5+Math.random()*7,col:COLORS[i%COLORS.length],rot:Math.random()*6,vr:(Math.random()-.5)*.35});
+  const t0=performance.now();
+  (function frame(t){
+    ctx.clearRect(0,0,W,H);
+    P.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.035; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.col; ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s); ctx.restore(); });
+    if(t-t0<3000) requestAnimationFrame(frame); else c.remove();
+  })(t0);
 }
 
 const myColor=()=>{ const p=players.find(p=>p.id===myId); return p?colorOf(p.color):'#888'; };
@@ -234,6 +274,10 @@ function render(){
       $('turnName').textContent = myTurn()?'🎯 SIRA SENDE':('Sıra: '+(cur?cur.name:'-'));
     }
     drawBoard($('board'), true);
+    const bd=$('board');
+    if(phase==='PLAYING' && myTurn()){ bd.style.setProperty('--glow', myColor()); bd.classList.add('glow'); }
+    else bd.classList.remove('glow');
+    applyFx();
     $('pstrip').innerHTML = players.map(p=>{
       const t=p.id===turn&&phase==='PLAYING';
       return `<div class="pbox ${t?'turn':''}" style="${t?'background:'+hexA(colorOf(p.color),.3):''}">
