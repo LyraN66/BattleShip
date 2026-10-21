@@ -98,6 +98,23 @@
   .chatBox input{flex:1}
   .chatBox .row2 button{width:auto;margin:0;padding:12px 16px}
   @keyframes flashin{0%{transform:translateX(-50%) scale(.5) rotate(-4deg);opacity:0}70%{transform:translateX(-50%) scale(1.12) rotate(2deg)}100%{transform:translateX(-50%) scale(1) rotate(0);opacity:1}}
+  /* GM: bot gemileri hayalet olarak görünür */
+  .cell.ghost{box-shadow:inset 0 0 0 2px rgba(255,255,255,.25)}
+  .cell .ghostdot{position:absolute;width:30%;height:30%;border-radius:50%;opacity:.55}
+  .cell{position:relative}
+  /* karakter seçimi */
+  .charchip{font-size:22px;line-height:1}
+  .charchip.on{background:var(--btn);border-color:var(--btn)}
+  /* bitirici hamle animasyonu */
+  .finisher{position:fixed;z-index:85;transform:translate(-50%,-50%);pointer-events:none;will-change:transform}
+  .finisher .fchar{font-size:62px;display:block;animation:fdrop .55s cubic-bezier(.25,1.4,.5,1)}
+  .finisher .fweap{position:absolute;left:58%;top:4%;font-size:38px;transform-origin:bottom left;animation:fswing .45s .45s ease-in both}
+  @keyframes fdrop{0%{transform:translateY(-78vh) scale(.5);opacity:0}55%{opacity:1}75%{transform:translateY(8px) scale(1.08)}100%{transform:translateY(0) scale(1)}}
+  @keyframes fswing{0%{transform:rotate(-95deg) scale(.7);opacity:0}35%{opacity:1}65%{transform:rotate(30deg) scale(1.2)}100%{transform:rotate(12deg) scale(1)}}
+  .slash{position:fixed;z-index:86;height:7px;width:0;background:linear-gradient(90deg,transparent,#fff,transparent);border-radius:4px;transform:translate(-50%,-50%) rotate(-42deg);pointer-events:none;box-shadow:0 0 16px 5px rgba(255,255,255,.85);animation:slashfx .4s .5s ease-out both}
+  @keyframes slashfx{0%{opacity:0;width:0}45%{opacity:1;width:130px}100%{opacity:0;width:150px}}
+  .fring{position:fixed;z-index:84;width:12px;height:12px;border-radius:50%;border:3px solid #ffd27a;transform:translate(-50%,-50%);pointer-events:none;animation:fringfx .5s .5s ease-out both}
+  @keyframes fringfx{0%{opacity:.9;width:12px;height:12px}100%{opacity:0;width:120px;height:120px}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
 </head>
@@ -120,6 +137,13 @@
     <label>veya bir odaya katıl</label>
     <input id="joinCode" class="code" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" />
     <button id="btnJoin" class="sec">Koda Katıl</button>
+    <button id="btnGM" class="ghost" onclick="toggleGmBox()">🛠️ Test / GM modu</button>
+    <div id="gmBox" class="hidden">
+      <label>Parola</label>
+      <input id="gmPass" type="password" placeholder="Parola" autocomplete="off" />
+      <button id="btnGMStart" class="sec">🤖 Teste gir (1 bot)</button>
+      <div class="sub" style="margin:8px 0 0">Bot gemilerini görürsün. Efektleri/arayüzü tek başına denemek için.</div>
+    </div>
   </div>
 
   <!-- LOBBY -->
@@ -134,6 +158,10 @@
     <div id="lobbySeries" class="card hidden" style="background:var(--panel2)">
       <div style="font-weight:600;margin-bottom:6px">🏅 Seri Durumu</div>
       <div id="lobbySeriesList"></div>
+    </div>
+    <div id="gmCharBox" class="card hidden" style="background:var(--panel2)">
+      <div style="font-weight:600;margin-bottom:6px">🥷 Karakterin (bitirici hamle)</div>
+      <div id="gmChars" class="rchips"></div>
     </div>
     <div id="hostSettings" class="hidden">
       <label>Her oyuncunun gemi sayısı: <span id="shipsVal">4</span></label>
@@ -235,6 +263,17 @@ let lastSunkSeq=0, readySent=false, timerIv=null;
 let prevShotKeys=new Set(), pendingFx=[], prevPhase="";
 let ultiPlayer=-1, ultiLeft=0, ultiBy="", lastUltiSeq=0;
 let sessionToken=null, leaving=false, reconnecting=false, reconnectTries=0, reconnTimer=null;
+let isGM=false, gmShips=[], myChar=+(localStorage.getItem('char')||0)||0;
+let sunkShipKeys=new Set(), lastSunkByName="";
+const CHARACTERS=[
+  {e:'🥷',w:'🔪',n:'Ninja'},
+  {e:'🏴‍☠️',w:'⚔️',n:'Korsan'},
+  {e:'💀',w:'🪓',n:'Cellat'},
+  {e:'🤺',w:'🗡️',n:'Eskrimci'},
+  {e:'🧑‍🌾',w:'🏏',n:'Değnekçi'},
+  {e:'🧙',w:'🔱',n:'Büyücü'},
+];
+const charOf=i=>CHARACTERS[((i%CHARACTERS.length)+CHARACTERS.length)%CHARACTERS.length];
 // --- sesli (WebRTC) ---
 let localStream=null, myVoiceOn=false, muted=false;
 const pcs={};  // peerId -> {pc, audioEl}
@@ -280,6 +319,11 @@ function maybeReconnect(){
 $('btnCreate').onclick=()=>{ const n=$('name').value.trim(); if(!n)return showErr('Önce adını yaz'); connect({t:'create',name:n}); };
 $('btnJoin').onclick=()=>{ const n=$('name').value.trim(); const c=$('joinCode').value.trim(); if(!n)return showErr('Önce adını yaz'); if(c.length<4)return showErr('4 haneli kodu gir'); connect({t:'join',code:c,name:n}); };
 $('btnCopy').onclick=()=>{ if(roomCode) navigator.clipboard&&navigator.clipboard.writeText(roomCode); $('btnCopy').textContent='✓ Kopyalandı'; };
+function toggleGmBox(){ $('gmBox').classList.toggle('hidden'); if(!$('gmBox').classList.contains('hidden')) $('gmPass').focus(); }
+$('btnGMStart').onclick=()=>{ const n=$('name').value.trim()||'GM'; const pass=$('gmPass').value; connect({t:'createTest',name:n,pass,char:myChar}); };
+$('gmPass').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('btnGMStart').click(); } });
+function pickChar(i){ myChar=i; localStorage.setItem('char',i); send({t:'char',c:i}); renderChars(); }
+function renderChars(){ const el=$('gmChars'); if(!el) return; el.innerHTML=CHARACTERS.map((c,i)=>`<button class="rchip charchip ${i===myChar?'on':''}" onclick="pickChar(${i})" title="${c.n}">${c.e}${c.w}</button>`).join(''); }
 $('btnStart').onclick=()=>send({t:'start'});
 $('btnReady').onclick=()=>{ readySent=true; send({t:'ready'}); render(); };
 $('shipsSlider').oninput=()=>{ $('shipsVal').textContent=$('shipsSlider').value; send({t:'config',ships:+$('shipsSlider').value,turnSec:+$('turnSlider').value}); };
@@ -288,23 +332,39 @@ $('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; se
 function leave(){ leaving=true; reconnecting=false; sessionToken=null; clearTimeout(reconnTimer);
   closeChat(); $('chatToasts').innerHTML='';
   myVoiceOn=false; Object.keys(pcs).forEach(id=>closePeer(id)); if(localStream){ try{localStream.getTracks().forEach(t=>t.stop());}catch(_){} localStream=null; }
-  try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
+  try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; isGM=false; gmShips=[]; sunkShipKeys=new Set(); roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
 
 function onMsg(m){
-  if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
+  if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; isGM=!!m.gm; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
   else if(m.t==='welcome'){ myId=m.id; isHost=!!m.host; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
   else if(m.t==='error'){ if(reconnecting){ reconnecting=false; sessionToken=null; try{ws&&ws.close();}catch(e){} ws=null; } showErr(m.msg); }
   else if(m.t==='rtc'){ handleRtc(m.from, m.data); return; }
   else if(m.t==='chat'){ addToast(m.name, m.color, m.text); return; }
+  else if(m.t==='gmships'){ gmShips=m.ships||[]; render(); return; }
   else if(m.t==='yourships'){ w=m.w; h=m.h; myShips=m.ships||[]; }
   else if(m.t==='state'){
     phase=m.phase; w=m.w; h=m.h; turn=m.turn; deadline=m.deadline; winner=m.winner;
     players=m.players||[]; shots=m.shots||[]; log=m.log||[]; if(m.code) roomCode=m.code;
+    if(m.gm!==undefined) isGM=!!m.gm;
     reveal=m.reveal||reveal;
     // efektler: yeni atışları bul
     const newFx=[]; (shots||[]).forEach(s=>{ if(!prevShotKeys.has(s.x+','+s.y)) newFx.push(s); });
     prevShotKeys=new Set((shots||[]).map(s=>s.x+','+s.y));
     pendingFx=newFx;
+    // bitirici hamle (GM modu): yeni batan gemiyi tespit edip animasyon oynat
+    {
+      const hitSet=new Set((shots||[]).filter(s=>s.hit).map(s=>s.x+','+s.y));
+      const allShips=[...(myShips||[]), ...gmShips.map(g=>g.cells)];
+      const nowComplete=new Set(); const freshShips=[];
+      allShips.forEach(cells=>{ if(!cells||!cells.length) return;
+        const sig=cells.map(c=>c[0]+','+c[1]).sort().join('|');
+        if(cells.every(c=>hitSet.has(c[0]+','+c[1]))){ nowComplete.add(sig); if(!sunkShipKeys.has(sig)) freshShips.push(cells); } });
+      if(isGM && (m.sunkSeq||0)>lastSunkSeq && freshShips.length){
+        const sinker=players.find(p=>p.name===m.sunkBy); const ch=charOf(sinker?sinker.char:0);
+        freshShips.forEach((cells,i)=>setTimeout(()=>finisher(ch,cells), i*480));
+      }
+      sunkShipKeys=nowComplete;
+    }
     if(newFx.some(s=>s.hit)){ screenShake(); vibrate([0,55]); }
     if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]); }
     ultiPlayer=(m.ultiPlayer!==undefined?m.ultiPlayer:-1); ultiLeft=m.ultiLeft||0; ultiBy=m.ultiBy||"";
@@ -312,7 +372,7 @@ function onMsg(m){
     if(phase==='OVER' && prevPhase!=='OVER'){ confettiBurst(); vibrate([0,80,60,120]); }
     prevPhase=phase;
     if(phase!=='PLACING'){ readySent=false; }
-    if(phase==='LOBBY'){ lastSunkSeq=0; lastUltiSeq=0; prevShotKeys=new Set(); reveal=null; myShips=[]; ultiPlayer=-1; ultiLeft=0; }
+    if(phase==='LOBBY'){ lastSunkSeq=0; lastUltiSeq=0; prevShotKeys=new Set(); reveal=null; myShips=[]; ultiPlayer=-1; ultiLeft=0; gmShips=[]; sunkShipKeys=new Set(); }
     reconcileVoice();
   }
   render();
@@ -354,6 +414,23 @@ function confettiBurst(){
   })(t0);
 }
 
+// Bitirici hamle: karakter yukarıdan düşer, silahıyla vurur
+function finisher(ch, cells){
+  const b=$('board'); if(!b||!cells||!cells.length) return;
+  const cx=Math.round(cells.reduce((a,c)=>a+c[0],0)/cells.length);
+  const cy=Math.round(cells.reduce((a,c)=>a+c[1],0)/cells.length);
+  const el=b.querySelector('[data-x="'+cx+'"][data-y="'+cy+'"]');
+  const r=(el||b).getBoundingClientRect();
+  const tx=r.left+r.width/2, ty=r.top+r.height/2;
+  const ring=document.createElement('div'); ring.className='fring'; ring.style.left=tx+'px'; ring.style.top=ty+'px'; document.body.appendChild(ring);
+  const slash=document.createElement('div'); slash.className='slash'; slash.style.left=tx+'px'; slash.style.top=ty+'px'; document.body.appendChild(slash);
+  const d=document.createElement('div'); d.className='finisher'; d.style.left=tx+'px'; d.style.top=(ty-10)+'px';
+  d.innerHTML='<span class="fchar">'+ch.e+'</span><span class="fweap">'+ch.w+'</span>';
+  document.body.appendChild(d);
+  setTimeout(screenShake, 480); vibrate([0,30,40,80]);
+  setTimeout(()=>{ d.remove(); slash.remove(); ring.remove(); }, 1500);
+}
+
 const myColor=()=>{ const p=players.find(p=>p.id===myId); return p?colorOf(p.color):'#888'; };
 const myTurn=()=>phase==='PLAYING'&&turn===myId;
 
@@ -376,6 +453,8 @@ function render(){
     const hasSeries = players.some(p=>p.games>0);
     show('lobbySeries', hasSeries);
     if(hasSeries) buildSeries($('lobbySeriesList'));
+    show('gmCharBox', isGM);
+    if(isGM){ renderChars(); $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
   }
 
   if(phase==='PLACING'||phase==='PLAYING'){
@@ -451,6 +530,7 @@ function drawBoard(container, interactive){
   const myCells=new Set(myShips.flat().map(c=>c[0]+','+c[1]));
   const shotMap={}; shots.forEach(s=>shotMap[s.x+','+s.y]=s);
   const revMap={}; if(reveal) reveal.forEach(r=>r.cells.forEach(c=>revMap[c[0]+','+c[1]]=r.color));
+  const ghostMap={}; if(isGM) gmShips.forEach(g=>g.cells.forEach(c=>ghostMap[c[0]+','+c[1]]=g.color));
   const colById={}; players.forEach(p=>colById[p.id]=colorOf(p.color));
   container.style.gridTemplateColumns=`repeat(${w},1fr)`;
   container.style.gridTemplateRows=`repeat(${h},1fr)`;
@@ -465,8 +545,11 @@ function drawBoard(container, interactive){
       else cls += ' faded';           // ıska → kararır, göz yormaz
     } else if(mine){
       cls += ' ship';                  // kendi gemin → parlak/belirgin
+    } else if(ghostMap[k]!==undefined){
+      cls += ' ghost';                 // GM: bot gemisi (hayalet)
     }
     if(rev!==undefined && !(mine)) style=`background:${hexA(colorOf(rev),.6)}`;
+    if(!shot && !mine && ghostMap[k]!==undefined && rev===undefined) mark=`<span class="ghostdot" style="background:${colorOf(ghostMap[k])}"></span>`;
     if(shot){
       if(shot.hit){ const sc=colById[shot.by]||'#fff'; mark=`<span style="color:${sc}">✕</span>`; }
       else { mark='<span class="miss"></span>'; }   // küçük, soluk nokta

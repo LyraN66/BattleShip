@@ -125,6 +125,73 @@ function tryPlaceAll(room, players, fleet, side) {
 
 function shipSunk(ship) { return ship.hit.every((h) => h); }
 
+// ---- Bot (test/GM modu) ----
+const BOT_NAMES = ["Komodor Bot", "Amiral Bot", "Reis Bot", "Kaptan Bot"];
+function addBot(room) {
+  const id = room.nextId++;
+  const color = room.players.size % 8;
+  const p = {
+    id, name: BOT_NAMES[rnd(BOT_NAMES.length)], color, alive: true, ready: false,
+    connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false,
+    wins: 0, tSunk: 0, tHits: 0, games: 0, char: rnd(6),
+    ws: null, token: null, graceTimer: null, bot: true,
+  };
+  room.players.set(id, p);
+  return p;
+}
+function botPick(room, botId) {
+  const W = room.w, H = room.h;
+  const shot = (x, y) => room.shots.has(key(x, y));
+  // Hedef modu: batmamış bir geminin vurulmuş hücresinin komşularını dene
+  const targets = [];
+  for (const [k, s] of room.shots) {
+    if (!s.hit) continue;
+    const occ = room.occupancy.get(k);
+    if (!occ) continue;
+    const [oid, si] = occ;
+    if (oid === botId) continue;
+    const op = room.players.get(oid);
+    const ship = op && op.ships ? op.ships[si] : null;
+    if (!ship || shipSunk(ship)) continue;
+    const [x, y] = k.split(",").map(Number);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < W && ny < H && !shot(nx, ny)) targets.push([nx, ny]);
+    }
+  }
+  if (targets.length) return targets[rnd(targets.length)];
+  // Avlanma modu: boş hücrelerden rastgele
+  const free = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!shot(x, y)) free.push([x, y]);
+  return free.length ? free[rnd(free.length)] : null;
+}
+function scheduleBot(room) {
+  if (room.phase !== "PLAYING") return;
+  const cur = currentTurnId(room);
+  const p = room.players.get(cur);
+  if (!p || !p.bot) return;
+  if (room.botTimer) return;
+  room.botTimer = setTimeout(() => {
+    room.botTimer = null;
+    if (room.phase !== "PLAYING") return;
+    if (currentTurnId(room) !== cur) return;
+    const t = botPick(room, cur);
+    if (t) fire(room, cur, t[0], t[1]);
+  }, 650 + rnd(650));
+}
+function clearBot(room) { if (room.botTimer) { clearTimeout(room.botTimer); room.botTimer = null; } }
+function sendGmShips(room) {
+  if (!room.gm) return;
+  const host = room.players.get(room.hostId);
+  if (!host || !host.ws) return;
+  const list = [];
+  for (const pp of room.players.values()) {
+    if (pp.id === room.hostId) continue;
+    for (const ship of (pp.ships || [])) list.push({ owner: pp.id, color: pp.color, cells: ship.cells });
+  }
+  send(host.ws, { t: "gmships", ships: list });
+}
+
 function startGame(room) {
   const players = [...room.players.values()];
   const fleet = fleetShapes(room.shipsPerPlayer);
@@ -147,9 +214,10 @@ function startGame(room) {
   }
   room.phase = "PLACING";
   for (const p of room.players.values()) {
-    p.ready = false;
+    p.ready = !!p.bot;   // botlar otomatik hazır
     if (p.ws) send(p.ws, yourShipsMsg(room, p));
   }
+  sendGmShips(room);
   room.log.push("Gemiler yerleştirildi, oyuncular onaylıyor…");
   broadcast(room);
 }
@@ -165,6 +233,7 @@ function resetForRematch(room) {
   room.ultiPlayer = -1; room.ultiLeft = 0; room.ultiSeq = 0; room.ultiBy = "";
   room.epoch = 0;
   if (room.timer) { clearTimeout(room.timer); room.timer = null; }
+  clearBot(room);
   room.log = ["Yeni oyun! Host başlatınca başlar"];
   broadcast(room);
 }
@@ -178,6 +247,7 @@ function beginPlaying(room) {
   room.log.push("Oyun başladı! Sıra: " + (room.players.get(currentTurnId(room))?.name || "-"));
   startTurnTimer(room);
   broadcast(room);
+  scheduleBot(room);
 }
 
 // ---- Atış ----
@@ -253,6 +323,7 @@ function fire(room, shooter, x, y) {
     advanceTurn(room);
   }
   broadcast(room);
+  scheduleBot(room);
 }
 
 function advanceTurn(room) {
@@ -269,6 +340,7 @@ function checkOver(room) {
   if (room.phase === "PLAYING" && alive.length <= 1) {
     room.phase = "OVER";
     if (room.timer) { clearTimeout(room.timer); room.timer = null; }
+    clearBot(room);
     room.log.push(alive.length ? `🏆 Kazanan: ${alive[0].name}` : "Oyun bitti");
     // Seri (art arda oyunlar) skorunu güncelle
     const winner = alive[0];
@@ -313,6 +385,7 @@ function stateMsg(room) {
     id: p.id, name: p.name, color: p.color, alive: p.alive, connected: p.connected,
     ready: p.ready, hits: p.hits, sunk: p.sunkCount, voice: !!p.voiceOn,
     wins: p.wins || 0, tSunk: p.tSunk || 0, tHits: p.tHits || 0, games: p.games || 0,
+    char: p.char || 0, bot: !!p.bot,
     shipsLeft: (p.ships || []).filter((s) => !shipSunk(s)).length,
   }));
   const shots = [...room.shots.entries()].map(([k, s]) => {
@@ -329,7 +402,7 @@ function stateMsg(room) {
     players, shots, log: room.log.slice(-8),
     sunkSeq: room.sunkSeq, sunkBy: room.sunkBy, sunkOwner: room.sunkOwner,
     ultiPlayer: room.ultiPlayer, ultiLeft: room.ultiLeft, ultiSeq: room.ultiSeq, ultiBy: room.ultiBy,
-    code: room.code,
+    code: room.code, gm: !!room.gm,
   };
   if (room.phase === "OVER") {
     const reveal = [];
@@ -383,9 +456,27 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "created", code, id, host: true, token });
+      send(ws, { t: "welcome", id, host: true, token });
+      broadcast(room);
+      break;
+    }
+    case "createTest": {
+      if (String(m.pass || "") !== "Amiral Battı") { send(ws, { t: "error", msg: "Yanlış parola" }); return; }
+      const code = makeCode();
+      const room = newRoom(code);
+      room.gm = true;
+      rooms.set(code, room);
+      const id = room.nextId++;
+      const token = makeToken();
+      ws.roomCode = code; ws.playerId = id;
+      room.hostId = id;
+      const p = { id, name: (m.name || "GM").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: (m.char | 0) || 0, ws, token, graceTimer: null };
+      room.players.set(id, p);
+      addBot(room);
+      send(ws, { t: "created", code, id, host: true, token, gm: true });
       send(ws, { t: "welcome", id, host: true, token });
       broadcast(room);
       break;
@@ -400,7 +491,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       const color = room.players.size % 8;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "welcome", id, host: false, token });
       broadcast(room);
@@ -418,6 +509,7 @@ function handle(ws, m) {
       ws.roomCode = code; ws.playerId = found.id;
       send(ws, { t: "welcome", id: found.id, host: found.id === room.hostId, token: found.token });
       if (room.phase !== "LOBBY") send(ws, yourShipsMsg(room, found));
+      if (room.gm && found.id === room.hostId && room.phase !== "LOBBY") sendGmShips(room);
       room.log.push(`${found.name} yeniden bağlandı`);
       broadcast(room);
       break;
@@ -447,6 +539,10 @@ function handle(ws, m) {
       } else if (m.t === "rematch") {
         if (pid !== room.hostId || room.phase !== "OVER") return;
         resetForRematch(room);
+      } else if (m.t === "char") {
+        if (room.phase !== "LOBBY") return;
+        const p = room.players.get(pid); if (p) p.char = Math.min(5, Math.max(0, m.c | 0));
+        broadcast(room);
       } else if (m.t === "voice") {
         const p = room.players.get(pid); if (p) p.voiceOn = !!m.on;
         broadcast(room);
@@ -497,10 +593,11 @@ function finalizeLeave(room, pid) {
     if (wasTurn) room.epoch++;
     if (!checkOver(room) && wasTurn) startTurnTimer(room);
   }
-  const anyConn = [...room.players.values()].some((pp) => pp.connected);
+  const anyConn = [...room.players.values()].some((pp) => pp.connected && !pp.bot);
   const anyGrace = [...room.players.values()].some((pp) => pp.graceTimer);
   if (!anyConn && !anyGrace) {
     if (room.timer) clearTimeout(room.timer);
+    clearBot(room);
     rooms.delete(room.code);
     return;
   }
