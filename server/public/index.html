@@ -47,6 +47,11 @@
   .pbox{min-width:64px;text-align:center;background:var(--panel2);border-radius:8px;padding:6px;font-size:12px}
   .pbox.turn{outline:2px solid #fff}
   .log{font-size:12px;color:#c8d6e5}
+  .scorerow{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  .scorerow:last-child{border-bottom:0}
+  .srname{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  .srname .dot{flex:0 0 auto}
+  .srstat{color:var(--muted);font-size:13px;margin-left:21px;margin-top:2px}
   .flash{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#b71c1c;border-radius:14px;padding:14px 22px;text-align:center;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.4)}
   .flash b{font-size:20px}
   .slider{width:100%}
@@ -517,9 +522,9 @@ function render(){
     const wn=players.find(p=>p.id===winner);
     $('winner').textContent = wn?('Kazanan: '+wn.name):'Oyun bitti';
     const sorted=[...players].sort((a,b)=>((b.score||0)-(a.score||0))||(b.sunk-a.sunk)||(b.hits-a.hits));
-    $('scores').innerHTML = sorted.map(p=>`<div style="display:flex;justify-content:space-between;margin:4px 0">
-      <span><span class="dot" style="background:${colorOf(p.color)}"></span> ${esc(p.name)}</span>
-      <span style="color:var(--muted)"><b style="color:#ffd27a">⭐${p.score||0} puan</b> · ${p.sunk} batırma · ${p.hits} isabet</span></div>`).join('');
+    $('scores').innerHTML = sorted.map(p=>`<div class="scorerow">
+      <div class="srname"><span class="dot" style="background:${colorOf(p.color)}"></span><span>${esc(p.name)}</span></div>
+      <div class="srstat"><b style="color:#ffd27a">⭐ ${p.score||0} puan</b> · ${p.sunk} batırma · ${p.hits} isabet</div></div>`).join('');
     drawBoard($('overBoard'), false);
     $('overLegend').innerHTML = players.map(p=>`<span class="pchip"><span class="dot" style="background:${colorOf(p.color)}"></span>${esc(p.name)}</span>`).join('');
     show('seriesBox', players.some(p=>p.games>0));
@@ -657,9 +662,9 @@ function buildSeries(el){
   const sorted=[...players].sort((a,b)=>(b.wins-a.wins)||((b.tScore||0)-(a.tScore||0))||(b.tSunk-a.tSunk));
   el.innerHTML = sorted.map((p,i)=>{
     const medal = i===0 && p.wins>0 ? '👑 ' : '';
-    return `<div style="display:flex;justify-content:space-between;margin:4px 0">
-      <span>${medal}<span class="dot" style="background:${colorOf(p.color)}"></span> ${esc(p.name)}</span>
-      <span style="color:var(--muted)">${p.wins} galibiyet · <b style="color:#ffd27a">${p.tScore||0} puan</b> · ${p.tSunk} batırma</span></div>`;
+    return `<div class="scorerow">
+      <div class="srname">${medal}<span class="dot" style="background:${colorOf(p.color)}"></span><span>${esc(p.name)}</span></div>
+      <div class="srstat">${p.wins} galibiyet · <b style="color:#ffd27a">${p.tScore||0} puan</b> · ${p.tSunk} batırma</div></div>`;
   }).join('');
 }
 
