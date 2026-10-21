@@ -355,8 +355,8 @@ function onMsg(m){
     pendingFx=newFx;
     if(newFx.some(s=>s.hit)){ screenShake(); vibrate([0,55]); }
     if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]);
-      // bitirici hamle (şimdilik sadece test/GM modu): batıranın karakteri batan geminin üstüne düşer
-      if(isGM && m.sunkCells && m.sunkCells.length){ const ch=charOf(m.sunkByChar||0); setTimeout(()=>finisher(ch, m.sunkCells), 220); }
+      // bitirici hamle: batıranın karakteri batan geminin üstüne düşüp parçalar (tüm oyunlar)
+      if(m.sunkCells && m.sunkCells.length){ const ch=charOf(m.sunkByChar||0); setTimeout(()=>finisher(ch, m.sunkCells), 220); }
     }
     ultiPlayer=(m.ultiPlayer!==undefined?m.ultiPlayer:-1); ultiLeft=m.ultiLeft||0; ultiBy=m.ultiBy||"";
     if((m.ultiSeq||0)>lastUltiSeq){ lastUltiSeq=m.ultiSeq; doUltiFlash(ultiBy); vibrate([0,40,30,40,30,90]); }
@@ -463,8 +463,9 @@ function render(){
     const hasSeries = players.some(p=>p.games>0);
     show('lobbySeries', hasSeries);
     if(hasSeries) buildSeries($('lobbySeriesList'));
-    show('gmCharBox', isGM);
-    if(isGM){ renderChars(); $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
+    show('gmCharBox', true);
+    renderChars();
+    if(isGM){ $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
   }
 
   if(phase==='PLACING'||phase==='PLAYING'){
