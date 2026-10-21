@@ -294,7 +294,7 @@ function fire(room, shooter, x, y) {
             const hi = room.hitInfo.get(key(c[0], c[1]));
             return hi && hi.by === shooter && hi.epoch === room.epoch;
           });
-          if (solo) {
+          if (solo && !wasUlti) {   // ulti bombasıyla tekrar ulti kazanılmaz
             room.ultiPlayer = shooter;
             room.ultiLeft += 4;
             room.ultiSeq++;
@@ -315,9 +315,11 @@ function fire(room, shooter, x, y) {
     // Gizli hazine bulundu → 2 atışlık ulti
     if (room.mines && room.mines.has(k)) {
       room.mines.delete(k);
-      room.ultiPlayer = shooter; room.ultiLeft += 2; room.ultiSeq++; room.ultiBy = sp.name;
-      room.log.push(`💣 ${sp.name} gizli hazineyi buldu! 2 atışlık ULTI!`);
-      grantedUlti = true;
+      if (!wasUlti) {   // ulti bombasıyla hazine bulunsa bile yeni ulti verilmez
+        room.ultiPlayer = shooter; room.ultiLeft += 2; room.ultiSeq++; room.ultiBy = sp.name;
+        room.log.push(`💣 ${sp.name} gizli hazineyi buldu! 2 atışlık ULTI!`);
+        grantedUlti = true;
+      }
     }
   }
 
@@ -325,8 +327,8 @@ function fire(room, shooter, x, y) {
   {
     const tier = Math.floor((sp.score || 0) / 7);
     if (tier > (sp.ultiScoreTier || 0)) {
-      sp.ultiScoreTier = tier;            // kilometre taşını tüket (bu atışta zaten ulti varsa bile)
-      if (!grantedUlti) {
+      sp.ultiScoreTier = tier;            // kilometre taşını tüket (ulti sırasında bile; tekrar tetiklenmesin)
+      if (!grantedUlti && !wasUlti) {
         room.ultiPlayer = shooter; room.ultiLeft += 4; room.ultiSeq++; room.ultiBy = sp.name;
         room.log.push(`⚡ ${sp.name} 7 puana ulaştı — ULTI!`);
         grantedUlti = true;
