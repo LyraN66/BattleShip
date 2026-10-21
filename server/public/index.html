@@ -105,16 +105,18 @@
   /* karakter seçimi */
   .charchip{font-size:22px;line-height:1}
   .charchip.on{background:var(--btn);border-color:var(--btn)}
-  /* bitirici hamle animasyonu */
-  .finisher{position:fixed;z-index:85;transform:translate(-50%,-50%);pointer-events:none;will-change:transform}
-  .finisher .fchar{font-size:62px;display:block;animation:fdrop .55s cubic-bezier(.25,1.4,.5,1)}
-  .finisher .fweap{position:absolute;left:58%;top:4%;font-size:38px;transform-origin:bottom left;animation:fswing .45s .45s ease-in both}
-  @keyframes fdrop{0%{transform:translateY(-78vh) scale(.5);opacity:0}55%{opacity:1}75%{transform:translateY(8px) scale(1.08)}100%{transform:translateY(0) scale(1)}}
-  @keyframes fswing{0%{transform:rotate(-95deg) scale(.7);opacity:0}35%{opacity:1}65%{transform:rotate(30deg) scale(1.2)}100%{transform:rotate(12deg) scale(1)}}
-  .slash{position:fixed;z-index:86;height:7px;width:0;background:linear-gradient(90deg,transparent,#fff,transparent);border-radius:4px;transform:translate(-50%,-50%) rotate(-42deg);pointer-events:none;box-shadow:0 0 16px 5px rgba(255,255,255,.85);animation:slashfx .4s .5s ease-out both}
-  @keyframes slashfx{0%{opacity:0;width:0}45%{opacity:1;width:130px}100%{opacity:0;width:150px}}
-  .fring{position:fixed;z-index:84;width:12px;height:12px;border-radius:50%;border:3px solid #ffd27a;transform:translate(-50%,-50%);pointer-events:none;animation:fringfx .5s .5s ease-out both}
-  @keyframes fringfx{0%{opacity:.9;width:12px;height:12px}100%{opacity:0;width:120px;height:120px}}
+  /* bitirici hamle (3D tarzı) */
+  .fscene{position:fixed;inset:0;z-index:85;pointer-events:none;perspective:720px;perspective-origin:50% 40%}
+  .f3d{position:absolute;transform:translate(-50%,-50%);transform-style:preserve-3d}
+  .f3d .body3d{transform-style:preserve-3d;animation:f3ddrop .55s cubic-bezier(.3,1.5,.5,1);will-change:transform}
+  .f3d .fchar{font-size:66px;display:block;filter:drop-shadow(0 12px 9px rgba(0,0,0,.55))}
+  .f3d .fweap{position:absolute;left:62%;top:0;font-size:40px;transform-origin:bottom left;animation:f3dswing .4s .46s ease-in both}
+  .f3d .shadow3d{position:absolute;left:50%;top:44px;width:74px;height:17px;background:rgba(0,0,0,.5);border-radius:50%;transform:translateX(-50%);filter:blur(3px);animation:f3dshadow .55s ease-out}
+  @keyframes f3ddrop{0%{transform:translateY(-82vh) translateZ(340px) rotateX(58deg) scale(.45);opacity:0}55%{opacity:1}72%{transform:translateY(12px) translateZ(0) rotateX(0) scaleY(.8) scaleX(1.15)}100%{transform:translateY(0) scale(1)}}
+  @keyframes f3dswing{0%{transform:rotateZ(-105deg) rotateY(45deg) scale(.65);opacity:0}35%{opacity:1}65%{transform:rotateZ(38deg) rotateY(0) scale(1.28)}100%{transform:rotateZ(12deg) scale(1)}}
+  @keyframes f3dshadow{0%{opacity:0;transform:translateX(-50%) scale(.3)}60%{opacity:.5}100%{opacity:.75;transform:translateX(-50%) scale(1)}}
+  .fring{position:fixed;z-index:86;width:14px;height:14px;border-radius:50%;border:4px solid #ffd27a;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 18px 4px rgba(255,210,122,.6);animation:fringfx .6s ease-out both}
+  @keyframes fringfx{0%{opacity:.95;width:14px;height:14px;border-width:5px}100%{opacity:0;width:150px;height:150px;border-width:1px}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
 </head>
@@ -353,8 +355,8 @@ function onMsg(m){
     pendingFx=newFx;
     if(newFx.some(s=>s.hit)){ screenShake(); vibrate([0,55]); }
     if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]);
-      // bitirici hamle: batıranın karakteri batan geminin üstüne düşer
-      if(m.sunkCells && m.sunkCells.length){ const ch=charOf(m.sunkByChar||0); setTimeout(()=>finisher(ch, m.sunkCells), 260); }
+      // bitirici hamle (şimdilik sadece test/GM modu): batıranın karakteri batan geminin üstüne düşer
+      if(isGM && m.sunkCells && m.sunkCells.length){ const ch=charOf(m.sunkByChar||0); setTimeout(()=>finisher(ch, m.sunkCells), 220); }
     }
     ultiPlayer=(m.ultiPlayer!==undefined?m.ultiPlayer:-1); ultiLeft=m.ultiLeft||0; ultiBy=m.ultiBy||"";
     if((m.ultiSeq||0)>lastUltiSeq){ lastUltiSeq=m.ultiSeq; doUltiFlash(ultiBy); vibrate([0,40,30,40,30,90]); }
@@ -403,21 +405,40 @@ function confettiBurst(){
   })(t0);
 }
 
-// Bitirici hamle: karakter yukarıdan düşer, silahıyla vurur
+// Bitirici hamle (3D tarzı): karakter yukarıdan kareye çakılır, silahıyla vurup gemiyi parçalar
 function finisher(ch, cells){
   const b=$('board'); if(!b||!cells||!cells.length) return;
-  const cx=Math.round(cells.reduce((a,c)=>a+c[0],0)/cells.length);
-  const cy=Math.round(cells.reduce((a,c)=>a+c[1],0)/cells.length);
-  const el=b.querySelector('[data-x="'+cx+'"][data-y="'+cy+'"]');
-  const r=(el||b).getBoundingClientRect();
-  const tx=r.left+r.width/2, ty=r.top+r.height/2;
-  const ring=document.createElement('div'); ring.className='fring'; ring.style.left=tx+'px'; ring.style.top=ty+'px'; document.body.appendChild(ring);
-  const slash=document.createElement('div'); slash.className='slash'; slash.style.left=tx+'px'; slash.style.top=ty+'px'; document.body.appendChild(slash);
-  const d=document.createElement('div'); d.className='finisher'; d.style.left=tx+'px'; d.style.top=(ty-10)+'px';
-  d.innerHTML='<span class="fchar">'+ch.e+'</span><span class="fweap">'+ch.w+'</span>';
-  document.body.appendChild(d);
-  setTimeout(screenShake, 480); vibrate([0,30,40,80]);
-  setTimeout(()=>{ d.remove(); slash.remove(); ring.remove(); }, 1500);
+  const rects=cells.map(c=>{ const el=b.querySelector('[data-x="'+c[0]+'"][data-y="'+c[1]+'"]'); return el?el.getBoundingClientRect():null; }).filter(Boolean);
+  if(!rects.length) return;
+  const tx=rects.reduce((a,r)=>a+r.left+r.width/2,0)/rects.length;
+  const ty=rects.reduce((a,r)=>a+r.top+r.height/2,0)/rects.length;
+  const scene=document.createElement('div'); scene.className='fscene';
+  scene.innerHTML='<div class="f3d" style="left:'+tx+'px;top:'+ty+'px">'
+    +'<div class="shadow3d"></div>'
+    +'<div class="body3d"><span class="fchar">'+ch.e+'</span><span class="fweap">'+ch.w+'</span></div></div>';
+  document.body.appendChild(scene);
+  vibrate([0,20]);
+  // çarpma anı
+  setTimeout(()=>{ screenShake(); vibrate([0,45,30,110]); shockwave(tx,ty); shatter(rects); }, 520);
+  setTimeout(()=>scene.remove(), 1550);
+}
+function shockwave(x,y){
+  const r=document.createElement('div'); r.className='fring'; r.style.left=x+'px'; r.style.top=y+'px';
+  document.body.appendChild(r); setTimeout(()=>r.remove(), 650);
+}
+function shatter(rects){
+  const c=document.createElement('canvas'); c.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:84';
+  document.body.appendChild(c); const ctx=c.getContext('2d');
+  const W=c.width=innerWidth, H=c.height=innerHeight;
+  const cols=['#9fb0c4','#c9d6e5','#b23232','#7f1d1d','#5a6b7d','#e8edf3'];
+  const P=[];
+  rects.forEach(r=>{ const cx=r.left+r.width/2, cy=r.top+r.height/2; const base=Math.max(6,r.width*0.32);
+    for(let i=0;i<8;i++) P.push({x:cx,y:cy,vx:(Math.random()-.5)*8,vy:-4-Math.random()*7,s:base*(0.4+Math.random()*0.7),col:cols[(Math.random()*cols.length)|0],rot:Math.random()*6,vr:(Math.random()-.5)*.6}); });
+  const t0=performance.now();
+  (function fr(t){ ctx.clearRect(0,0,W,H); const life=(t-t0)/950; let alive=life<1;
+    P.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.45; p.rot+=p.vr; ctx.save(); ctx.globalAlpha=Math.max(0,1-life); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.col; ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s); ctx.restore(); });
+    if(alive) requestAnimationFrame(fr); else c.remove();
+  })(t0);
 }
 
 const myColor=()=>{ const p=players.find(p=>p.id===myId); return p?colorOf(p.color):'#888'; };
@@ -442,9 +463,8 @@ function render(){
     const hasSeries = players.some(p=>p.games>0);
     show('lobbySeries', hasSeries);
     if(hasSeries) buildSeries($('lobbySeriesList'));
-    show('gmCharBox', true);
-    renderChars();
-    if(isGM){ $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
+    show('gmCharBox', isGM);
+    if(isGM){ renderChars(); $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
   }
 
   if(phase==='PLACING'||phase==='PLAYING'){
