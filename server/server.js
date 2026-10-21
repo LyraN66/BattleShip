@@ -73,6 +73,7 @@ function newRoom(code) {
     epoch: 0,                 // bir oyuncunun kesintisiz sırası (ulti/solo tespiti için)
     hitInfo: new Map(),       // key -> {by, epoch}
     ultiPlayer: -1, ultiLeft: 0, ultiSeq: 0, ultiBy: "",
+    mines: new Set(),         // gizli hazine hücreleri (bulan +2 atışlık ulti)
     timer: null,
   };
 }
@@ -133,7 +134,7 @@ function addBot(room) {
   const p = {
     id, name: BOT_NAMES[rnd(BOT_NAMES.length)], color, alive: true, ready: false,
     connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false,
-    wins: 0, tSunk: 0, tHits: 0, games: 0, char: rnd(6),
+    wins: 0, tSunk: 0, tHits: 0, games: 0, score: 0, ultiScoreTier: 0, tScore: 0, char: rnd(6),
     ws: null, token: null, graceTimer: null, bot: true,
   };
   room.players.set(id, p);
@@ -212,6 +213,11 @@ function startGame(room) {
     if (p) p.ships = ships;
     ships.forEach((ship, si) => ship.cells.forEach((c) => room.occupancy.set(key(c[0], c[1]), [pid, si])));
   }
+  // Gizli hazine: 2 boş hücre seç (bulan +2 atışlık ulti kazanır)
+  room.mines = new Set();
+  const empties = [];
+  for (let y = 0; y < room.h; y++) for (let x = 0; x < room.w; x++) { const kk = key(x, y); if (!room.occupancy.has(kk)) empties.push(kk); }
+  for (let i = 0; i < 2 && empties.length; i++) { const idx = rnd(empties.length); room.mines.add(empties[idx]); empties.splice(idx, 1); }
   room.phase = "PLACING";
   for (const p of room.players.values()) {
     p.ready = !!p.bot;   // botlar otomatik hazır
@@ -225,7 +231,9 @@ function startGame(room) {
 function resetForRematch(room) {
   for (const p of room.players.values()) {
     p.alive = true; p.ready = false; p.ships = []; p.hits = 0; p.sunkCount = 0;
+    p.score = 0; p.ultiScoreTier = 0;
   }
+  room.mines = new Set();
   room.phase = "LOBBY";
   room.shots = new Map(); room.occupancy = new Map(); room.hitInfo = new Map();
   room.turnOrder = []; room.turnPos = 0; room.deadline = 0;
@@ -267,6 +275,7 @@ function fire(room, shooter, x, y) {
     room.hitInfo.set(k, { by: shooter, epoch: room.epoch });
     sp.hits++;
     const [ownerId, shipIdx] = owner;
+    if (ownerId !== shooter) sp.score = (sp.score || 0) + 1;   // düşman isabeti +1 (kendi gemin sayılmaz)
     const ownerP = room.players.get(ownerId);
     const ship = ownerP && ownerP.ships ? ownerP.ships[shipIdx] : null;
     if (ship) {
@@ -280,6 +289,7 @@ function fire(room, shooter, x, y) {
         else room.log.push(`${sp.name}, ${ownerP ? ownerP.name : "?"} oyuncusunun gemisini batırdı`);
         // ULTI: düşman gemisinin TÜM parçaları bu oyuncu tarafından bu sırada vurulduysa
         if (ownerId !== shooter) {
+          sp.score = (sp.score || 0) + 3;   // düşman gemisi batırma +3
           const solo = ship.cells.every((c) => {
             const hi = room.hitInfo.get(key(c[0], c[1]));
             return hi && hi.by === shooter && hi.epoch === room.epoch;
@@ -302,6 +312,24 @@ function fire(room, shooter, x, y) {
     }
   } else {
     room.shots.set(k, { by: shooter, hit: false });
+    // Gizli hazine bulundu → 2 atışlık ulti
+    if (room.mines && room.mines.has(k)) {
+      room.mines.delete(k);
+      room.ultiPlayer = shooter; room.ultiLeft += 2; room.ultiSeq++; room.ultiBy = sp.name;
+      room.log.push(`💣 ${sp.name} gizli hazineyi buldu! 2 atışlık ULTI!`);
+      grantedUlti = true;
+    }
+  }
+
+  // 7 puana ulaşınca ULTI (her 7 puanda bir, 4 atış)
+  {
+    const tier = Math.floor((sp.score || 0) / 7);
+    if (tier > (sp.ultiScoreTier || 0)) {
+      sp.ultiScoreTier = tier;
+      room.ultiPlayer = shooter; room.ultiLeft += 4; room.ultiSeq++; room.ultiBy = sp.name;
+      room.log.push(`⚡ ${sp.name} 7 puana ulaştı — ULTI!`);
+      grantedUlti = true;
+    }
   }
 
   if (checkOver(room)) { room.ultiPlayer = -1; room.ultiLeft = 0; broadcast(room); return; }
@@ -349,6 +377,7 @@ function checkOver(room) {
     for (const p of room.players.values()) {
       p.tSunk = (p.tSunk || 0) + p.sunkCount;
       p.tHits = (p.tHits || 0) + p.hits;
+      p.tScore = (p.tScore || 0) + (p.score || 0);
       p.games = (p.games || 0) + 1;
     }
     return true;
@@ -386,6 +415,7 @@ function stateMsg(room) {
     id: p.id, name: p.name, color: p.color, alive: p.alive, connected: p.connected,
     ready: p.ready, hits: p.hits, sunk: p.sunkCount, voice: !!p.voiceOn,
     wins: p.wins || 0, tSunk: p.tSunk || 0, tHits: p.tHits || 0, games: p.games || 0,
+    score: p.score || 0, tScore: p.tScore || 0,
     char: p.char || 0, bot: !!p.bot,
     shipsLeft: (p.ships || []).filter((s) => !shipSunk(s)).length,
   }));
@@ -458,7 +488,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: 0, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, score: 0, ultiScoreTier: 0, tScore: 0, char: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "created", code, id, host: true, token });
       send(ws, { t: "welcome", id, host: true, token });
@@ -475,7 +505,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "GM").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: (m.char | 0) || 0, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "GM").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, score: 0, ultiScoreTier: 0, tScore: 0, char: (m.char | 0) || 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       addBot(room);
       send(ws, { t: "created", code, id, host: true, token, gm: true });
@@ -493,7 +523,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       const color = room.players.size % 8;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, char: 0, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, score: 0, ultiScoreTier: 0, tScore: 0, char: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "welcome", id, host: false, token });
       broadcast(room);

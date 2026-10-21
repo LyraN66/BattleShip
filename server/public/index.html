@@ -506,7 +506,8 @@ function render(){
       return `<div class="pbox ${t?'turn':''}" style="${t?'background:'+hexA(colorOf(p.color),.3):''}">
         <span class="dot" style="background:${colorOf(p.color)}"></span><br>
         <span style="color:${p.alive?'#fff':'#6b7a8d'}">${esc(p.name)}</span><br>
-        <span style="color:var(--muted)">${p.alive?(p.shipsLeft+' gemi'):'elendi'}</span></div>`;
+        <span style="color:var(--muted)">${p.alive?(p.shipsLeft+' gemi'):'elendi'}</span><br>
+        <span style="color:#ffd27a;font-weight:700">⭐ ${p.score||0}p</span></div>`;
     }).join('');
     $('log').innerHTML = log.slice(-5).map(l=>'• '+esc(l)).join('<br>');
     startTimer();
@@ -515,10 +516,10 @@ function render(){
   if(phase==='OVER'){
     const wn=players.find(p=>p.id===winner);
     $('winner').textContent = wn?('Kazanan: '+wn.name):'Oyun bitti';
-    const sorted=[...players].sort((a,b)=>(b.sunk*100+b.hits)-(a.sunk*100+a.hits));
+    const sorted=[...players].sort((a,b)=>((b.score||0)-(a.score||0))||(b.sunk-a.sunk)||(b.hits-a.hits));
     $('scores').innerHTML = sorted.map(p=>`<div style="display:flex;justify-content:space-between;margin:4px 0">
       <span><span class="dot" style="background:${colorOf(p.color)}"></span> ${esc(p.name)}</span>
-      <span style="color:var(--muted)">${p.sunk} batırma · ${p.hits} isabet</span></div>`).join('');
+      <span style="color:var(--muted)"><b style="color:#ffd27a">⭐${p.score||0} puan</b> · ${p.sunk} batırma · ${p.hits} isabet</span></div>`).join('');
     drawBoard($('overBoard'), false);
     $('overLegend').innerHTML = players.map(p=>`<span class="pchip"><span class="dot" style="background:${colorOf(p.color)}"></span>${esc(p.name)}</span>`).join('');
     show('seriesBox', players.some(p=>p.games>0));
@@ -642,7 +643,7 @@ function scrollToGame(){ try{ window.scrollTo({top:0,behavior:'smooth'}); }catch
 function openChat(){ const b=$('chatBox'); b.classList.remove('hidden'); const i=$('chatInput'); i.value=''; setTimeout(()=>i.focus(),30); }
 function closeChat(){ $('chatBox').classList.add('hidden'); const i=$('chatInput'); if(i) i.blur(); scrollToGame(); }
 function sendChatInput(){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v.slice(0,120)}); $('chatInput').value=''; closeChat(); }
-function quick(e){ send({t:'chat',text:e}); }
+function quick(e){ send({t:'chat',text:e}); closeChat(); }
 function addToast(name,color,text){
   const c=$('chatToasts'); const d=document.createElement('div'); d.className='toast';
   d.innerHTML='<span class="who" style="color:'+colorOf(color)+'">'+esc(name)+'</span>'+esc(text);
@@ -653,12 +654,12 @@ function addToast(name,color,text){
 
 // ---------- Seri skoru ----------
 function buildSeries(el){
-  const sorted=[...players].sort((a,b)=>(b.wins-a.wins)||(b.tSunk-a.tSunk)||(b.tHits-a.tHits));
+  const sorted=[...players].sort((a,b)=>(b.wins-a.wins)||((b.tScore||0)-(a.tScore||0))||(b.tSunk-a.tSunk));
   el.innerHTML = sorted.map((p,i)=>{
     const medal = i===0 && p.wins>0 ? '👑 ' : '';
     return `<div style="display:flex;justify-content:space-between;margin:4px 0">
       <span>${medal}<span class="dot" style="background:${colorOf(p.color)}"></span> ${esc(p.name)}</span>
-      <span style="color:var(--muted)">${p.wins} galibiyet · ${p.tSunk} batırma</span></div>`;
+      <span style="color:var(--muted)">${p.wins} galibiyet · <b style="color:#ffd27a">${p.tScore||0} puan</b> · ${p.tSunk} batırma</span></div>`;
   }).join('');
 }
 
