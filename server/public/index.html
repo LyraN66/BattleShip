@@ -14,6 +14,7 @@
   .wrap{max-width:520px;margin:0 auto;padding:18px}
   h1{font-size:26px;margin:10px 0 2px;text-align:center}
   .sub{color:var(--muted);text-align:center;font-size:13px;margin-bottom:14px}
+  .homeStats{display:block;width:max-content;max-width:90%;margin:2px auto 12px;text-align:center;color:#cfe0f0;font-size:13px;background:var(--panel2);border:1px solid var(--line);padding:6px 14px;border-radius:999px}
   .card{background:var(--panel);border-radius:14px;padding:14px;margin:10px 0}
   label{display:block;color:var(--muted);font-size:13px;margin:8px 0 4px}
   input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0a2238;color:#fff;font-size:16px}
@@ -128,6 +129,7 @@
 <body>
 <div class="wrap">
   <h1>⚓ Amiral Battı</h1>
+  <div id="homeStats" class="homeStats hidden">—</div>
   <div id="err" class="err hidden"></div>
   <div id="voiceBar" class="voiceBar hidden">
     <button id="btnVoice" onclick="toggleVoice()">🎤 Sesli: Kapalı</button>
@@ -339,7 +341,7 @@ $('turnSlider').oninput=()=>{ $('turnVal').textContent=$('turnSlider').value; se
 function leave(){ leaving=true; reconnecting=false; sessionToken=null; clearTimeout(reconnTimer);
   closeChat(); $('chatToasts').innerHTML='';
   myVoiceOn=false; Object.keys(pcs).forEach(id=>closePeer(id)); if(localStream){ try{localStream.getTracks().forEach(t=>t.stop());}catch(_){} localStream=null; }
-  try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; isGM=false; gmShips=[]; sunkShipKeys=new Set(); roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); }
+  try{ws&&ws.close();}catch(e){} ws=null; phase=""; myId=-1; isHost=false; isGM=false; gmShips=[]; sunkShipKeys=new Set(); roomCode=null; myShips=[]; reveal=null; readySent=false; lastSunkSeq=0; prevShotKeys=new Set(); pendingFx=[]; prevPhase=""; ultiPlayer=-1; ultiLeft=0; lastUltiSeq=0; if(timerIv){clearInterval(timerIv);timerIv=null;} render(); fetchStats(); }
 
 function onMsg(m){
   if(m.t==='created'){ roomCode=m.code; myId=m.id; isHost=!!m.host; isGM=!!m.gm; if(m.token) sessionToken=m.token; reconnecting=false; reconnectTries=0; clearTimeout(reconnTimer); showErr(''); }
@@ -452,6 +454,7 @@ const myTurn=()=>phase==='PLAYING'&&turn===myId;
 function render(){
   const inRoom = !!ws;
   show('home', !inRoom);
+  show('homeStats', !inRoom);
   show('lobby', inRoom && (phase===''||phase==='LOBBY'));
   show('game', inRoom && (phase==='PLACING'||phase==='PLAYING'));
   show('over', inRoom && phase==='OVER');
@@ -713,6 +716,15 @@ radio.onplaying=()=>{ radioPlaying=true; renderRadio(); };
 radio.onpause=()=>{ radioPlaying=false; renderRadio(); };
 radio.onerror=()=>{ radioPlaying=false; radioStatus('Çalınamadı, başka istasyon dene'); renderRadio(); };
 renderRadio();
+
+async function fetchStats(){
+  if(ws) return;   // odadayken gerekmiyor
+  try{ const r=await fetch('/stats',{cache:'no-store'}); const j=await r.json();
+    const el=$('homeStats'); if(el) el.textContent='🟢 Şu an '+j.rooms+' oda açık'+(j.playing?(' · '+j.playing+' oyunda'):'');
+  }catch(_){ const el=$('homeStats'); if(el) el.textContent='⚓ Oynamaya hazır'; }
+}
+fetchStats(); setInterval(fetchStats, 12000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && !ws) fetchStats(); });
 
 render();
 </script>

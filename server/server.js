@@ -457,6 +457,13 @@ const server = http.createServer((req, res) => {
     res.end("ok rooms " + rooms.size);
     return;
   }
+  if (req.url === "/stats") {
+    let playing = 0, players = 0;
+    for (const r of rooms.values()) { if (r.phase === "PLAYING") playing++; players += r.players.size; }
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ rooms: rooms.size, playing, players }));
+    return;
+  }
   // Çalışan sürümün commit'i (dağıtım doğrulaması için). /v/<herhangi> da aynı yanıtı verir.
   if (req.url === "/version" || req.url.startsWith("/v/")) {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
