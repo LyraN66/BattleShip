@@ -321,14 +321,16 @@ function fire(room, shooter, x, y) {
     }
   }
 
-  // 7 puana ulaşınca ULTI (her 7 puanda bir, 4 atış)
+  // 7 puana ulaşınca ULTI (her 7 puanda bir, 4 atış). Bir atışta en fazla bir ulti verilir.
   {
     const tier = Math.floor((sp.score || 0) / 7);
     if (tier > (sp.ultiScoreTier || 0)) {
-      sp.ultiScoreTier = tier;
-      room.ultiPlayer = shooter; room.ultiLeft += 4; room.ultiSeq++; room.ultiBy = sp.name;
-      room.log.push(`⚡ ${sp.name} 7 puana ulaştı — ULTI!`);
-      grantedUlti = true;
+      sp.ultiScoreTier = tier;            // kilometre taşını tüket (bu atışta zaten ulti varsa bile)
+      if (!grantedUlti) {
+        room.ultiPlayer = shooter; room.ultiLeft += 4; room.ultiSeq++; room.ultiBy = sp.name;
+        room.log.push(`⚡ ${sp.name} 7 puana ulaştı — ULTI!`);
+        grantedUlti = true;
+      }
     }
   }
 
@@ -496,7 +498,7 @@ function handle(ws, m) {
       break;
     }
     case "createTest": {
-      if (String(m.pass || "") !== "Amiral Battı") { send(ws, { t: "error", msg: "Yanlış parola" }); return; }
+      if (String(m.pass || "") !== "Amiral") { send(ws, { t: "error", msg: "Yanlış parola" }); return; }
       const code = makeCode();
       const room = newRoom(code);
       room.gm = true;
