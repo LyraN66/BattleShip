@@ -69,7 +69,7 @@ function newRoom(code) {
     turnOrder: [],
     turnPos: 0,
     deadline: 0,
-    sunkSeq: 0, sunkBy: "", sunkOwner: "",
+    sunkSeq: 0, sunkBy: "", sunkOwner: "", sunkCells: null, sunkByChar: 0,
     epoch: 0,                 // bir oyuncunun kesintisiz sırası (ulti/solo tespiti için)
     hitInfo: new Map(),       // key -> {by, epoch}
     ultiPlayer: -1, ultiLeft: 0, ultiSeq: 0, ultiBy: "",
@@ -229,7 +229,7 @@ function resetForRematch(room) {
   room.phase = "LOBBY";
   room.shots = new Map(); room.occupancy = new Map(); room.hitInfo = new Map();
   room.turnOrder = []; room.turnPos = 0; room.deadline = 0;
-  room.sunkSeq = 0; room.sunkBy = ""; room.sunkOwner = "";
+  room.sunkSeq = 0; room.sunkBy = ""; room.sunkOwner = ""; room.sunkCells = null; room.sunkByChar = 0;
   room.ultiPlayer = -1; room.ultiLeft = 0; room.ultiSeq = 0; room.ultiBy = "";
   room.epoch = 0;
   if (room.timer) { clearTimeout(room.timer); room.timer = null; }
@@ -275,6 +275,7 @@ function fire(room, shooter, x, y) {
       if (shipSunk(ship)) {
         sp.sunkCount++;
         room.sunkSeq++; room.sunkBy = sp.name; room.sunkOwner = ownerP ? ownerP.name : "";
+        room.sunkCells = ship.cells; room.sunkByChar = sp.char || 0;
         if (ownerId === shooter) room.log.push(`${sp.name} kendi gemisini batırdı!`);
         else room.log.push(`${sp.name}, ${ownerP ? ownerP.name : "?"} oyuncusunun gemisini batırdı`);
         // ULTI: düşman gemisinin TÜM parçaları bu oyuncu tarafından bu sırada vurulduysa
@@ -401,6 +402,7 @@ function stateMsg(room) {
     winner: room.phase === "OVER" ? ([...room.players.values()].find((p) => p.alive)?.id ?? -1) : -1,
     players, shots, log: room.log.slice(-8),
     sunkSeq: room.sunkSeq, sunkBy: room.sunkBy, sunkOwner: room.sunkOwner,
+    sunkCells: room.sunkCells, sunkByChar: room.sunkByChar,
     ultiPlayer: room.ultiPlayer, ultiLeft: room.ultiLeft, ultiSeq: room.ultiSeq, ultiBy: room.ultiBy,
     code: room.code, gm: !!room.gm,
   };

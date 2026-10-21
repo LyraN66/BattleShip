@@ -351,22 +351,11 @@ function onMsg(m){
     const newFx=[]; (shots||[]).forEach(s=>{ if(!prevShotKeys.has(s.x+','+s.y)) newFx.push(s); });
     prevShotKeys=new Set((shots||[]).map(s=>s.x+','+s.y));
     pendingFx=newFx;
-    // bitirici hamle (GM modu): yeni batan gemiyi tespit edip animasyon oynat
-    {
-      const hitSet=new Set((shots||[]).filter(s=>s.hit).map(s=>s.x+','+s.y));
-      const allShips=[...(myShips||[]), ...gmShips.map(g=>g.cells)];
-      const nowComplete=new Set(); const freshShips=[];
-      allShips.forEach(cells=>{ if(!cells||!cells.length) return;
-        const sig=cells.map(c=>c[0]+','+c[1]).sort().join('|');
-        if(cells.every(c=>hitSet.has(c[0]+','+c[1]))){ nowComplete.add(sig); if(!sunkShipKeys.has(sig)) freshShips.push(cells); } });
-      if(isGM && (m.sunkSeq||0)>lastSunkSeq && freshShips.length){
-        const sinker=players.find(p=>p.name===m.sunkBy); const ch=charOf(sinker?sinker.char:0);
-        freshShips.forEach((cells,i)=>setTimeout(()=>finisher(ch,cells), i*480));
-      }
-      sunkShipKeys=nowComplete;
-    }
     if(newFx.some(s=>s.hit)){ screenShake(); vibrate([0,55]); }
-    if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]); }
+    if(m.sunkSeq>lastSunkSeq){ lastSunkSeq=m.sunkSeq; doFlash(m.sunkBy,m.sunkOwner); vibrate([0,60,40,90]);
+      // bitirici hamle: batıranın karakteri batan geminin üstüne düşer
+      if(m.sunkCells && m.sunkCells.length){ const ch=charOf(m.sunkByChar||0); setTimeout(()=>finisher(ch, m.sunkCells), 260); }
+    }
     ultiPlayer=(m.ultiPlayer!==undefined?m.ultiPlayer:-1); ultiLeft=m.ultiLeft||0; ultiBy=m.ultiBy||"";
     if((m.ultiSeq||0)>lastUltiSeq){ lastUltiSeq=m.ultiSeq; doUltiFlash(ultiBy); vibrate([0,40,30,40,30,90]); }
     if(phase==='OVER' && prevPhase!=='OVER'){ confettiBurst(); vibrate([0,80,60,120]); }
@@ -453,8 +442,9 @@ function render(){
     const hasSeries = players.some(p=>p.games>0);
     show('lobbySeries', hasSeries);
     if(hasSeries) buildSeries($('lobbySeriesList'));
-    show('gmCharBox', isGM);
-    if(isGM){ renderChars(); $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
+    show('gmCharBox', true);
+    renderChars();
+    if(isGM){ $('lobbyHint').textContent='🛠️ GM modu — bot hazır. Karakterini seç, Başlat.'; }
   }
 
   if(phase==='PLACING'||phase==='PLAYING'){
@@ -627,8 +617,9 @@ function renderVoice(){
 }
 
 // ---------- Uçucu sohbet / emoji ----------
+function scrollToGame(){ try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_){ window.scrollTo(0,0); } }
 function openChat(){ const b=$('chatBox'); b.classList.remove('hidden'); const i=$('chatInput'); i.value=''; setTimeout(()=>i.focus(),30); }
-function closeChat(){ $('chatBox').classList.add('hidden'); }
+function closeChat(){ $('chatBox').classList.add('hidden'); const i=$('chatInput'); if(i) i.blur(); scrollToGame(); }
 function sendChatInput(){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v.slice(0,120)}); $('chatInput').value=''; closeChat(); }
 function quick(e){ send({t:'chat',text:e}); }
 function addToast(name,color,text){
