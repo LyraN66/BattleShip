@@ -270,6 +270,14 @@ function checkOver(room) {
     room.phase = "OVER";
     if (room.timer) { clearTimeout(room.timer); room.timer = null; }
     room.log.push(alive.length ? `🏆 Kazanan: ${alive[0].name}` : "Oyun bitti");
+    // Seri (art arda oyunlar) skorunu güncelle
+    const winner = alive[0];
+    if (winner) winner.wins = (winner.wins || 0) + 1;
+    for (const p of room.players.values()) {
+      p.tSunk = (p.tSunk || 0) + p.sunkCount;
+      p.tHits = (p.tHits || 0) + p.hits;
+      p.games = (p.games || 0) + 1;
+    }
     return true;
   }
   return false;
@@ -304,6 +312,7 @@ function stateMsg(room) {
   const players = [...room.players.values()].map((p) => ({
     id: p.id, name: p.name, color: p.color, alive: p.alive, connected: p.connected,
     ready: p.ready, hits: p.hits, sunk: p.sunkCount, voice: !!p.voiceOn,
+    wins: p.wins || 0, tSunk: p.tSunk || 0, tHits: p.tHits || 0, games: p.games || 0,
     shipsLeft: (p.ships || []).filter((s) => !shipSunk(s)).length,
   }));
   const shots = [...room.shots.entries()].map(([k, s]) => {
@@ -374,7 +383,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       room.hostId = id;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color: 0, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "created", code, id, host: true, token });
       send(ws, { t: "welcome", id, host: true, token });
@@ -391,7 +400,7 @@ function handle(ws, m) {
       const token = makeToken();
       ws.roomCode = code; ws.playerId = id;
       const color = room.players.size % 8;
-      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, ws, token, graceTimer: null };
+      const p = { id, name: (m.name || "Oyuncu").slice(0, 14), color, alive: true, ready: false, connected: true, hits: 0, sunkCount: 0, ships: [], voiceOn: false, wins: 0, tSunk: 0, tHits: 0, games: 0, ws, token, graceTimer: null };
       room.players.set(id, p);
       send(ws, { t: "welcome", id, host: false, token });
       broadcast(room);
@@ -445,6 +454,12 @@ function handle(ws, m) {
         // WebRTC sinyalini hedef oyuncuya ilet
         const target = room.players.get(m.to | 0);
         if (target && target.ws) send(target.ws, { t: "rtc", from: pid, data: m.data });
+      } else if (m.t === "chat") {
+        const p = room.players.get(pid); if (!p) return;
+        const text = String(m.text || "").slice(0, 120).trim();
+        if (!text) return;
+        const msg = { t: "chat", from: pid, name: p.name, color: p.color, text };
+        for (const pp of room.players.values()) if (pp.ws) send(pp.ws, msg);
       }
     }
   }
